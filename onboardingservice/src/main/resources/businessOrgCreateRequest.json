@@ -1,0 +1,28 @@
+{
+	"name": "#[flowVars['businessGroupName']]",
+	"parentOrganizationId": "#[flowVars['rootOrgId']]",
+	"ownerId": "#[flowVars['ownerId']]",
+	"entitlements": {
+		"createSubOrgs": false,
+		"createEnvironments": false,
+		"globalDeployment": false,
+		"vCoresProduction": {
+			"assigned": 0
+		},
+		"vCoresSandbox": {
+			"assigned": 0
+		},
+		"vCoresDesign": {
+			"assigned": 0
+		},
+		"staticIps": {
+			"assigned": 0
+		},
+		"vpcs": {
+			"assigned": 0
+		},
+		"loadBalancer": {
+			"assigned": 0
+		}
+	}
+}

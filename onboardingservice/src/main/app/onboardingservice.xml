@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:smtp="http://www.mulesoft.org/schema/mule/smtp" xmlns:context="http://www.springframework.org/schema/context" xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting"
+	xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
+http://www.mulesoft.org/schema/mule/smtp http://www.mulesoft.org/schema/mule/smtp/current/mule-smtp.xsd">
+    <http:listener-config name="HTTP_Listener_Configuration" host="0.0.0.0" port="8082" basePath="api" doc:name="HTTP Listener Configuration"/>
+    <http:request-config name="HTTP_Request_Configuration" protocol="HTTPS" host="anypoint.mulesoft.com" port="443" doc:name="HTTP Request Configuration">
+    </http:request-config>
+    <configuration defaultExceptionStrategy-ref="exception-handler" doc:name="Configuration">
+		<expression-language autoResolveVariables="false">
+			<import class="org.apache.commons.lang3.StringEscapeUtils"/>
+			<import class="org.apache.commons.io.FilenameUtils"/>
+		</expression-language>
+	</configuration>
+    <context:property-placeholder location="config.properties"/>
+    <smtp:gmail-connector name="Gmail" contentType="text/html"  validateConnections="true" doc:name="Gmail"/>
+    <flow name="onboardingserviceFlow">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/onboard" doc:name="HTTP"/>
+        <json:json-to-object-transformer returnClass="java.util.Map" doc:name="JSON to Object"/>
+        <message-properties-transformer scope="invocation" doc:name="Message Properties">
+            <add-message-property key="businessGroupName" value="#[payload.businessGroupName]"/>
+            <add-message-property key="userName" value="#[payload.userName]"/>
+            <add-message-property key="orgAdminUGGroup" value="#[payload.orgAdminGroupNames]"/>
+            <add-message-property key="apiCreatorUGGroup" value="#[payload.apiCreatorGroupNames]"/>
+        </message-properties-transformer>
+        <set-variable variableName="rootOrgId" value="${rootOrgId}" doc:name="rootOrgId"/>
+        <enricher target="#[flowVars.orgAdminGroupNames]" doc:name="extract orgAdminGroupNames">
+            <processor-chain doc:name="Processor Chain">
+                <set-payload value="#[['external_names' : payload.orgAdminGroupNames]]" doc:name="Set Payload"/>
+                <json:object-to-json-transformer doc:name="Object to JSON"/>
+            </processor-chain>
+        </enricher>
+        <enricher target="#[flowVars.apiCreatorGroupNames]" doc:name="extract apiCreatorGroupNames">
+            <processor-chain doc:name="Processor Chain">
+                <set-payload value="#[['external_names' : payload.apiCreatorGroupNames]]" doc:name="Set Payload"/>
+                <json:object-to-json-transformer doc:name="Object to JSON"/>
+            </processor-chain>
+        </enricher>
+        <flow-ref name="getAnypointToken" doc:name="getAnypointToken"/>
+        <flow-ref name="getOwnerId" doc:name="getOwnerId"/>
+        <flow-ref name="createBusinessOrg" doc:name="createBusinessOrg"/>
+        <flow-ref name="getRoleGroupIdsForDifferentRoles" doc:name="getRoleGroupIdsForDifferentRoles"/>
+        <foreach collection="#[flowVars.roleGroupIdList]" doc:name="For Each">
+            <foreach collection="#[payload.entrySet()]" doc:name="For Each">
+                <logger message="#[payload.key] and #[payload.value]" level="INFO" doc:name="Logger"/>
+                <set-variable variableName="roleGroupId" value="#[payload.value]" doc:name="set roleGroupId to OrgAdminRoleId"/>
+                <choice doc:name="Choice">
+                    <when expression="#[payload.key.equals(&quot;Organization Administrators&quot;)]">
+                        <set-variable variableName="externalGroupName" value="#[flowVars.orgAdminGroupNames]" doc:name="set externalGroupName"/>
+                        <flow-ref name="setExternalGroupMapping" doc:name="setExternalGroupMapping"/>
+                    </when>
+                    <when expression="#[payload.key.equals(&quot;API Creators&quot;)]">
+                        <set-variable variableName="externalGroupName" value="#[flowVars.apiCreatorGroupNames]" doc:name="set externalGroupName"/>
+                        <flow-ref name="setExternalGroupMapping" doc:name="setExternalGroupMapping"/>
+                    </when>
+                    <otherwise>
+                        <logger message="Do Nothing!" level="INFO" doc:name="Logger"/>
+                    </otherwise>
+                </choice>
+            </foreach>
+        </foreach>
+        <set-property propertyName="subject" value="On-boarding process completed for group #[flowVars.businessGroupName]" doc:name="subject"/>
+        <parse-template location="OnboardingProcessSuccessAcknowledgementTemplate.html" doc:name="Parse Template"/>
+        <smtp:outbound-endpoint host="smtp.gmail.com" connector-ref="Gmail" responseTimeout="10000" doc:name="SMTP" password="${emailPassword}" user="${emailUsername}" from="${emailFrom}" mimeType="text/html" port="587" to="${emailTo}"/>
+        <set-property propertyName="Content-Type" value="application/json" doc:name="Content-Type"/>
+        <set-payload value="{&quot;message&quot;:&quot;Organization Created and external group names have been configured&quot;}" mimeType="application/json" doc:name="Set Payload"/>
+        <exception-strategy ref="exception-handler" doc:name="Reference Exception Strategy"/>
+    </flow>
+    <sub-flow name="getAnypointToken">
+    <enricher target="#[flowVars.anypointToken]" doc:name="Message Enricher">
+    <processor-chain doc:name="Processor Chain">
+        <set-payload value="username=${username}&amp;password=${password}" doc:name="setPayload"/>
+ 	    <set-property value="application/x-www-form-urlencoded" propertyName="Content-Type" doc:name="set Content-Type" />
+        <http:request config-ref="HTTP_Request_Configuration" path="/accounts/login" method="POST" doc:name="getAnypointToken">
+        <http:success-status-code-validator values="0..499" />
+        </http:request>
+        <choice doc:name="Choice">
+                    <when expression="#[message.inboundProperties['http.status']=='200']">
+                        <json:json-to-object-transformer returnClass="java.util.Map" doc:name="JSON to Object"/>
+                        <logger message="response received from AnypointPlatform for getAnypointToken call #[payload]" level="INFO" doc:name="Logger"/>
+                        <set-payload value="#[payload.access_token]" doc:name="token" doc:description="exttracts the token from the JSON response and stores it in payload" />
+                    </when>
+                    <otherwise>
+                            <logger level="INFO" category="logger after getAnypointToken call" doc:name="Logger"/>
+                        <scripting:component doc:name="Script">
+                            <scripting:script engine="Groovy"><![CDATA[throw new RuntimeException('Non 200 response received from AnypointPlatform while requesting token, no token received, impossible to proceed')]]></scripting:script>
+                        </scripting:component>
+                    </otherwise>
+                </choice>
+                </processor-chain>
+                </enricher>
+    </sub-flow>
+    <sub-flow name="getOwnerId">
+    <enricher target="#[flowVars.ownerId]" doc:name="Message Enricher">
+    <processor-chain doc:name="Processor Chain">
+        <http:request config-ref="HTTP_Request_Configuration" path="accounts/api/organizations/${rootOrgId}/members" method="GET" doc:name="getIdOfTheUser/Owner">
+            <http:request-builder>
+                        <http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]"/>
+            </http:request-builder>
+            <http:success-status-code-validator values="0..499"/>
+        </http:request>
+        <choice doc:name="Choice">
+                    <when expression="#[message.inboundProperties['http.status']=='200']">
+                        <json:json-to-object-transformer returnClass="java.util.Map" doc:name="JSON to Object"/>
+                        <logger message="response received from AnypointPlatform for getOwnerId call #[payload]" level="INFO" doc:name="Logger"/>
+                <choice doc:name="Choice">
+                    <when expression="#[payload.total != 0]">
+                        <logger message="#[payload.data[0].id]" level="INFO" doc:name="Logger"/>
+                                <set-payload value="#[payload.data[0].id]" doc:name="userId"/>
+                    </when>
+                    <otherwise>
+                                <set-payload value="5cc35693-2dbc-43ff-b789-5af897f32b97" doc:name="hardcode Laura's Id"/>
+                    </otherwise>
+                </choice>
+                    </when>
+                    <otherwise>
+                            <logger level="INFO" category="logger after getOwnerId call" doc:name="Logger"/>
+                        <scripting:component doc:name="Script">
+                            <scripting:script engine="Groovy"><![CDATA[throw new RuntimeException('Non 200 response received from AnypointPlatform while requesting owner info impossible to proceed')]]></scripting:script>
+                        </scripting:component>
+                    </otherwise>
+                </choice>
+                </processor-chain>
+                </enricher>
+    </sub-flow>
+    <sub-flow name="createBusinessOrg">
+    <enricher target="#[flowVars['businessOrgId']]" doc:name="Message Enricher">
+    <processor-chain doc:name="Processor Chain">
+        <parse-template location="businessOrgCreateRequest.json" doc:name="Parse Template"/>
+                <set-property propertyName="Content-Type" value="application/json" doc:name="Content-Type"/>
+        <http:request config-ref="HTTP_Request_Configuration" path="accounts/api/organizations" method="POST" doc:name="createBusinessOrg">
+            <http:request-builder>
+                        <http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]"/>
+            </http:request-builder>
+            <http:success-status-code-validator values="0..499"/>
+        </http:request>
+        <choice doc:name="Choice">
+                    <when expression="#[message.inboundProperties['http.status']=='201']">
+                        <json:json-to-object-transformer returnClass="java.util.Map" doc:name="JSON to Object"/>
+                        <logger message="response received from AnypointPlatform for create BusinessOrgCall #[payload]" level="INFO" doc:name="Logger"/>
+                <set-payload value="#[payload.id]" doc:name="businessOrgId"/>
+                    </when>
+                    <otherwise>
+                            <logger level="INFO" category="logger after createBusinessOrg call" doc:name="Logger"/>
+                        <scripting:component doc:name="Script">
+                            <scripting:script engine="Groovy"><![CDATA[throw new RuntimeException('Non 200 response received from AnypointPlatform while creating businessOrg, impossible to proceed')]]></scripting:script>
+                        </scripting:component>
+                    </otherwise>
+                </choice>
+        </processor-chain>
+        </enricher>
+    </sub-flow>
+    <sub-flow name="getRoleGroupIdsForDifferentRoles">
+        <http:request config-ref="HTTP_Request_Configuration" path="accounts/api/organizations/#[flowVars['businessOrgId']]/rolegroups" method="GET" doc:name="getRoles">
+            <http:request-builder>
+                <http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]"/>
+            </http:request-builder>
+            <http:success-status-code-validator values="0..499"/>
+        </http:request>
+        <json:json-to-object-transformer returnClass="java.util.Map" doc:name="JSON to Object"/>
+        <set-variable variableName="roleGroupIdList" value="#[new java.util.ArrayList()]" doc:name="roleGroupIdList"/>
+        <foreach collection="#[payload.data]" doc:name="Iterate through Roles to Pick required Roles">
+            <choice doc:name="Choice">
+                <when expression="#[payload.name.equals(&quot;Organization Administrators&quot;)]">
+                    <set-variable variableName="temp" value="#[[payload.name : payload.role_group_id]]" doc:name="temp"/>
+                    <set-variable variableName="orgAdminRoleId" value="#[payload.role_group_id]" doc:name="orgAdminRoleId"/>
+                    <expression-component doc:name="addTo roleGroupIdList"><![CDATA[#[flowVars.roleGroupIdList.add(flowVars.temp)]]]></expression-component>
+                    <remove-variable variableName="temp" doc:name="remove temp"/>
+                </when>
+                <when expression="#[payload.name.equals(&quot;Exchange Viewers&quot;)]">
+                    <set-variable variableName="temp" value="#[[payload.name : payload.role_group_id]]" doc:name="temp"/>
+                    <set-variable variableName="exchangeViewerRoleId" value="#[payload.role_group_id]" doc:name="exchangeViewerRoleId"/>
+                    <expression-component doc:name="addTo roleGroupIdList"><![CDATA[#[flowVars.roleGroupIdList.add(flowVars.temp)]]]></expression-component>
+                    <remove-variable variableName="temp" doc:name="remove temp"/>
+                </when>
+                <when expression="#[payload.name.equals(&quot;Exchange Contributors&quot;)]">
+                    <set-variable variableName="temp" value="#[[payload.name : payload.role_group_id]]" doc:name="temp"/>
+                    <set-variable variableName="exchangeContributorRoleId" value="#[payload.role_group_id]" doc:name="exchangeContributorRoleId"/>
+                    <expression-component doc:name="addTo roleGroupIdList"><![CDATA[#[flowVars.roleGroupIdList.add(flowVars.temp)]]]></expression-component>
+                    <remove-variable variableName="temp" doc:name="remove temp"/>
+                </when>
+                <when expression="#[payload.name.equals(&quot;API Creators&quot;)]">
+                    <set-variable variableName="temp" value="#[[payload.name : payload.role_group_id]]" doc:name="temp"/>
+                    <set-variable variableName="apiCreatorRoleId" value="#[payload.role_group_id]" doc:name="apiCreatorRoleId"/>
+                    <expression-component doc:name="addTo roleGroupIdList"><![CDATA[#[flowVars.roleGroupIdList.add(flowVars.temp)]]]></expression-component>
+                    <remove-variable variableName="temp" doc:name="remove temp"/>
+                </when>
+                <when expression="#[payload.name.equals(&quot;Portals Viewer&quot;)]">
+                    <set-variable variableName="temp" value="#[[payload.name : payload.role_group_id]]" doc:name="temp"/>
+                    <set-variable variableName="portalsViewerRoleId" value="#[payload.role_group_id]" doc:name="portalsViewerRoleId"/>
+                    <expression-component doc:name="addTo roleGroupIdList"><![CDATA[#[flowVars.roleGroupIdList.add(flowVars.temp)]]]></expression-component>
+                    <remove-variable variableName="temp" doc:name="remove temp"/>
+                </when>
+                <when expression="#[payload.name.equals(&quot;API Versions Owner&quot;)]">
+                    <set-variable variableName="temp" value="#[[payload.name : payload.role_group_id]]" doc:name="temp"/>
+                    <set-variable variableName="apiVersionsOwnerRoleId" value="#[payload.role_group_id]" doc:name="apiVersionsOwnerRoleId"/>
+                    <expression-component doc:name="addTo roleGroupIdList"><![CDATA[#[flowVars.roleGroupIdList.add(flowVars.temp)]]]></expression-component>
+                    <remove-variable variableName="temp" doc:name="remove temp"/>
+                </when>
+                <when expression="#[payload.name.equals(&quot;Exchange Administrators&quot;)]">
+                    <set-variable variableName="temp" value="#[[payload.name : payload.role_group_id]]" doc:name="temp"/>
+                    <set-variable variableName="exchangeAdminRoleId" value="#[payload.role_group_id]" doc:name="exchangeAdminRoleId"/>
+                    <expression-component doc:name="addTo roleGroupIdList"><![CDATA[#[flowVars.roleGroupIdList.add(flowVars.temp)]]]></expression-component>
+                    <remove-variable variableName="temp" doc:name="remove temp"/>
+                </when>
+                <otherwise>
+                    <logger message="Default path, do nothing" level="INFO" doc:name="Logger"/>
+                </otherwise>
+            </choice>
+        </foreach>
+    </sub-flow>
+    <sub-flow name="setExternalGroupMapping">
+        <set-payload value="#[flowVars.externalGroupName]" doc:name="Set Payload"/>
+        <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+        <http:request config-ref="HTTP_Request_Configuration" path="accounts/api/organizations/#[flowVars['businessOrgId']]/rolegroups/#[flowVars['roleGroupId']]" method="PUT" doc:name="setExternalGroupMapping">
+            <http:request-builder>
+                <http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]"/>
+            </http:request-builder>
+            <http:success-status-code-validator values="0..499"/>
+        </http:request>
+        <choice doc:name="Choice">
+                    <when expression="#[message.inboundProperties['http.status']=='200']">
+                        <json:json-to-object-transformer returnClass="java.util.Map" doc:name="JSON to Object"/>
+                        <logger message="response received from AnypointPlatform for setExternalGroupMapping call #[payload]" level="INFO" doc:name="Logger"/>
+                    </when>
+                    <otherwise>
+                            <logger level="INFO" category="logger after setExternalGroupMapping call" doc:name="Logger"/>
+                        <scripting:component doc:name="Script">
+                            <scripting:script engine="Groovy"><![CDATA[throw new RuntimeException('Non 200 response received from AnypointPlatform while setting external Group Mapping, impossible to proceed')]]></scripting:script>
+                        </scripting:component>
+                    </otherwise>
+                </choice>
+    </sub-flow>
+</mule>
