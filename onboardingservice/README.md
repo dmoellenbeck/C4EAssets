@@ -40,7 +40,12 @@ emailTo=<address of the recipient>
 
 # Expected Output 
 
+A business group with name that was provided as part of the input request's businessGroupName element is created on Anypoint platform.
+
 ![newBusinessOrg](https://github.com/mulesoft-consulting/C4EAssets/blob/master/images/newBusinessOrg.png)
+
+Assuming the customer's organization is a federated org, you should expect to see the roles (orgAdmin and apiCreator in this case) have been populated with corresponding values
+that were provided as part of the input.
 
 ![externalGroupMapping](https://github.com/mulesoft-consulting/C4EAssets/blob/master/images/externalGroupMapping.png)
 
