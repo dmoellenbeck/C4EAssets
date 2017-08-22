@@ -5,7 +5,7 @@ API that creates a sub-organization in the Anypoint platform, assigns external g
 Typically in large organizations, it is very common to have multiple business units leveraging the Sub-Organizations to group their assets.
 As part of the on-boarding process, this would mean that someone from the Operations team would gather the required information like the
 name of the Sub-Org and also the distinguished names of the AD groups that the users would have to belong to in order to inherit permissions via
-external group mapping. This API automates that process by leveraging Anypoint platform apis to create business orgs and to assign external 
+external group mapping (external group mapping can be done only for federated orgs). This API automates that process by leveraging Anypoint platform apis to create business orgs and to assign external 
 group mappings. This API would then be extended to integrated with other components of the Customer's on-boarding process. For example,
 at ExxonMobil, this API has been extended to also integrated with TFS to provision the repository for the consumers as well. 
 
