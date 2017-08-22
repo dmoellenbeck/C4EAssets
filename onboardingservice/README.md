@@ -50,3 +50,9 @@ that were provided as part of the input.
 ![externalGroupMapping](https://github.com/mulesoft-consulting/C4EAssets/blob/master/images/externalGroupMapping.png)
 
 # Email Snapshot
+
+<object data="https://github.com/mulesoft-consulting/C4EAssets/blob/master/images/EmailTemplate.pdf" type="application/pdf" width="700px" height="700px">
+    <embed src="https://github.com/mulesoft-consulting/C4EAssets/blob/master/images/EmailTemplate.pdf">
+        This browser does not support PDFs. Please download the PDF to view it: <a href="https://github.com/mulesoft-consulting/C4EAssets/blob/master/images/EmailTemplate.pdf">Download PDF</a>.</p>
+    </embed>
+</object>
