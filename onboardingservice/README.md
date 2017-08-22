@@ -38,6 +38,8 @@ emailFrom=<address of the sender>
 emailTo=<address of the recipient>
 ```
 
+# Expected Output 
 
+![externalGroupMapping](images/externalGroupMapping.png)
 
 # Email Snapshot
