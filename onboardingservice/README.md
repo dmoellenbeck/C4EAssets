@@ -14,6 +14,18 @@ API that creates a sub-organization in the Anypoint platform, assigns external g
 }
 ```
 
+# Config.properties - Please fill the properties file (under src/main/resources) with appropriate values
+
+```
+rootOrgId=<plugin the root organization Id>
+username=<anypoint platform username>
+password=<anypoint platform password>
+emailUsername=<username to be used for email>
+emailPassword=<password to be used for email>
+emailFrom=<address of the sender>
+emailTo=<address of the recipient>
+```
+
 # Sample Response
 
 ```
