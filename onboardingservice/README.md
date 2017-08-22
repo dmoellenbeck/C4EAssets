@@ -40,6 +40,8 @@ emailTo=<address of the recipient>
 
 # Expected Output 
 
-![externalGroupMapping](images/externalGroupMapping.png)
+![newBusinessOrg](https://github.com/mulesoft-consulting/C4EAssets/blob/master/images/newBusinessOrg.png)
+
+![externalGroupMapping](https://github.com/mulesoft-consulting/C4EAssets/blob/master/images/externalGroupMapping.png)
 
 # Email Snapshot
