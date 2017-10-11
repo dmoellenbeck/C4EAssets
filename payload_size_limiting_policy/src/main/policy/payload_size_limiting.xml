@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<policy id="{{ policyId }}" policyName="Size Limiting Policy" xmlns="http://www.mulesoft.org/schema/mule/policy"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:spring="http://www.springframework.org/schema/beans"
+        xmlns:mule="http://www.mulesoft.org/schema/mule/core"
+        xmlns:mule-ss="http://www.mulesoft.org/schema/mule/spring-security"
+        xmlns:ss="http://www.springframework.org/schema/security"
+        xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting"
+        xmlns:api-platform-gw="http://www.mulesoft.org/schema/mule/api-platform-gw"
+        xsi:schemaLocation="http://www.mulesoft.org/schema/mule/policy http://www.mulesoft.org/schema/mule/policy/current/mule-policy.xsd
+              http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+              http://www.mulesoft.org/schema/mule/spring-security http://www.mulesoft.org/schema/mule/spring-security/current/mule-spring-security.xsd
+              http://www.springframework.org/schema/security http://www.springframework.org/schema/security/spring-security-current.xsd
+              http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd
+              http://www.mulesoft.org/schema/mule/api-platform-gw http://www.mulesoft.org/schema/mule/api-platform-gw/current/mule-api-platform-gw.xsd
+              http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+    <pointcut>
+        <!--
+            This file is a policy template, in the final XML deployed to Mule
+            the names surrounded by double bracket will be replaced with
+            configuration parameters.
+        -->
+        <api-platform-gw:api-pointcut apiName="{{ apiName }}" apiVersion="{{ apiVersionName }}"/>
+    </pointcut>
+
+    <!-- 
+        The before tag executes before your API flows. In this tag you can
+        filter or manipulate the incoming message.
+    -->
+    <before>
+    	<mule:set-variable variableName="originalPayload" value="#[payload]"/>
+        <mule:set-variable variableName="maxPayloadSize" value="{{ maxPayloadSize }}" />
+        <mule:logger level="INFO"></mule:logger>
+        <scripting:component>
+            <scripting:script engine="Groovy"><![CDATA[
+import java.io.InputStream;
+import java.util.Iterator;
+import java.util.Set;
+
+import org.apache.commons.io.IOUtils;
+import org.apache.log4j.Logger;
+import org.mule.api.MuleEventContext;
+import org.mule.api.MuleMessage;
+import org.mule.module.http.internal.ParameterMap;
+import org.mule.transport.NullPayload;
+
+import com.mulesoft.module.threat.RewindableInputStream;
+
+
+public class RequestSizeCalculator {
+	private final static Logger logger = Logger.getLogger(RequestSizeCalculator.class);
+
+	public static void checkSize(MuleMessage message) throws Exception {
+
+		int maxsize = Integer.parseInt(message.getInvocationProperty("maxPayloadSize").toString());
+		int currentsize = 0;
+		logger.info("max allowed size :: " + maxsize);
+		if((message.getPayload() instanceof NullPayload && message.getInboundAttachmentNames().isEmpty())){
+			logger.debug("message has no payloads and no attachments");
+			message.setInvocationProperty("payloadSizeWithinRange",
+					true);
+		}else{
+			if (message.getInboundProperty("content-length") != null) {
+				currentsize = Integer.parseInt(message.getInboundProperty("content-length"));
+				logger.info("content-length header available, size of the incoming payload :: " + currentsize);
+				if (currentsize > maxsize) {
+					message.setInvocationProperty("payloadSizeWithinRange", false);
+				} else {
+					message.setInvocationProperty("payloadSizeWithinRange", true);
+				}
+			}else {
+				// CODE FOR TRANSFER-ENCODING CHUNKED - START
+				logger.info(" no content-length set");
+				if (!(message.getInboundProperty("content-type").equals("application/x-www-form-urlencoded"))) {
+					if(!(message.getPayload() instanceof NullPayload)){
+						if (!(message.getPayload() instanceof InputStream)) {
+							RewindableInputStream rewindableInputStream = new RewindableInputStream(
+									(InputStream) message.getPayload());
+							message.setPayload(rewindableInputStream);
+							byte[] bytes = IOUtils.toByteArray(rewindableInputStream);
+							((RewindableInputStream) message.getPayload()).rewind();
+							logger.info("byte[] length: " + bytes.length);
+							if (bytes.length > maxsize) {
+								message.setInvocationProperty("payloadSizeWithinRange", false);
+							} else {
+								message.setInvocationProperty("payloadSizeWithinRange", true);
+							}
+						}
+					}
+					else if (!(message.getInboundAttachmentNames().isEmpty())) {
+						Set<String> obj = message.getInboundAttachmentNames();
+						logger.info("are attachments empty: " + message.getInboundAttachmentNames().isEmpty());
+						logger.info("attachments: " + obj);
+						Iterator<String> iterator = obj.iterator();
+						int sizecount = 0;
+						while (iterator.hasNext()) {
+							String name = iterator.next();
+							byte[] resultBuff = IOUtils
+									.toByteArray(message.getInboundAttachment(name).getInputStream());
+							logger.info("attachment name: " + name + "\t" + "attachment size: " + resultBuff.length);
+							sizecount = sizecount + resultBuff.length;
+							if (sizecount > maxsize) {
+								logger.info("size of attachments :: " + sizecount + "\t" + "max size allowed :: "
+										+ maxsize);
+								break;
+							}
+						}
+						if (sizecount > maxsize) {
+							message.setInvocationProperty("payloadSizeWithinRange", false);
+						} else {
+							message.setInvocationProperty("payloadSizeWithinRange", true);
+						}
+					} else {
+						logger.info("no payload, no attachments");
+						message.setInvocationProperty("payloadSizeWithinRange", true);
+						}
+
+				} else {
+					if ((message.getPayload() instanceof ParameterMap)){
+						ParameterMap map = (ParameterMap) message.getPayload();
+						int contentLength = 0;
+						// increment the count for the "&" delimiter
+						contentLength = contentLength + (map.size() - 1);
+
+						for (def entry : map.entrySet()) {
+							// increment the count for the "=" separator
+							contentLength++;
+							logger.debug("key:" + entry.getKey());
+							logger.debug("value:" + entry.getValue());
+							contentLength = contentLength + getByteCount(entry.getKey());
+							contentLength = contentLength + getByteCount(entry.getValue());
+						}
+						logger.info("length of the content: " + "\t" + contentLength);
+						if (contentLength > maxsize) {
+							message.setInvocationProperty("payloadSizeWithinRange", false);
+						} else {
+							message.setInvocationProperty("payloadSizeWithinRange", true);
+						}
+
+					}
+					else {
+						logger.error("Unknown payload type");
+						message.setInvocationProperty("payloadSizeWithinRange", false);
+					} 
+				}
+
+			}
+		}
+	}
+
+
+	private static int getByteCount(String key) {
+		if (key == null || key.trim().isEmpty()) {
+			return 0;
+		}
+		int count = 0;
+		for (int i = 0 ; i < key.length() ; i ++){
+			logger.debug("key is:"+"\t"+key +"\t"+"character is:"+ "\t"+key.substring(i, i+1));
+			if (key.substring(i, i+1).matches("[^A-Za-z0-9 ]")){
+				count = count + 3;
+			} else {
+				count ++ ;
+			}
+		}
+		return count;
+	}
+
+}
+new RequestSizeCalculator().checkSize(message);
+]]></scripting:script>
+        </scripting:component>
+        <mule:logger level="INFO"></mule:logger>
+        <mule:message-filter onUnaccepted="policyViolation">
+            <mule:expression-filter expression="#[flowVars['payloadSizeWithinRange'].equals(true)]" />
+        </mule:message-filter>  
+        <mule:set-payload value="#[flowVars.originalPayload]"/>
+    </before>
+
+
+    <mule:processor-chain name="policyViolation">
+        <mule:set-property propertyName="http.status" value="413"/>
+        <mule:set-property propertyName="Content-Type" value="application/json"/>
+        <mule:set-payload value='{ "error" : "SizeLimitingPolicyViolation: Payload size exceeded the range","message":"PAYLOAD TOO LARGE"}'/>
+    </mule:processor-chain>
+</policy>

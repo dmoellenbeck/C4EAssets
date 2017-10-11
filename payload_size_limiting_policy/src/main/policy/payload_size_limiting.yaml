@@ -1,0 +1,19 @@
+category: Compliance
+configuration: 
+  - 
+    description: "Maximum payload size in bytes"
+    name: "Maximum Payload Size"
+    propertyName: maxPayloadSize
+    sensitive: true
+    maximumValue: 2147483647
+    minimumValue: 0
+    type: int
+    
+description: "Compares the size of the input payload against the allowed max size and rejects if input payload is larger"
+id: Size Limiting Policy
+name: "Size Limiting Policy"
+requiresConnectivity: false
+requiredCharacteristics: []
+providedCharacteristics: []
+standalone: true
+type: custom
