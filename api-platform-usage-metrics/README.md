@@ -2,12 +2,17 @@
 This service is intended to provide visibility into the consumption/adoption of the Anypoint Platform by Customers. It leverages Anypoint platform APIs to iteratively query the business orgs for statistics around Users, Active APIs, Exchange Assets, Runtime Consumption.
 
 # Why?
-Typically in large organizations, it is very common to have multiple business units leveraging the Sub-Organizations to group their assets.
-As part of the on-boarding process, this would mean that someone from the Operations team would gather the required information like the
-name of the Sub-Org and also the distinguished names of the AD groups that the users would have to belong to in order to inherit permissions via
-external group mapping (external group mapping can be done only for federated orgs). This API automates that process by leveraging Anypoint platform apis to create business orgs and to assign external 
-group mappings. This API would then be extended to integrated with other components of the Customer's on-boarding process. For example,
-at ExxonMobil, this API has been extended to also integrated with TFS to provision the repository for the consumers as well. 
+Typically in large organizations that use the Anypoint platform, it becomes very important to monitor the adoption of the Anypoint platform.
+The following are some of the metrics that are important to capture:
+* Number of API Definitions
+* Number of Active APIs (ones that have been deployed to the runtime)
+* Number of assets published in Exchange
+* Number of Business Organizations
+* On-prem runtime Capacity and CloudHub Capacity Usage (apis deployed on-prem vs Cloudhub)
+* Policies being used and the association between a policy and the apis that are using the policy
+* Transactions processed in the last quarter
+
+While all of this information is available in the Anypoint platform there is no easy way to look at all of this data in a single plane. The goal of this service is to leverage the Platform apis to query this data and return a json that can be processed by a reporting tool or Splunk to build dashboards.
 
 # Sample Request
 
