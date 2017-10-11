@@ -10,5 +10,5 @@ This policy is used to perform a payload size enforcement for APIs.
 * Choose the policy and click on Configure policy
 * Specify the Maximum payload size in bytes
 
-
+![payloadsizelimitingpolicy](https://github.com/mulesoft-consulting/C4EAssets/blob/master/images/PayloadSizeLimitingPolicy.png)
 
