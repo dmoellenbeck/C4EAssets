@@ -1,0 +1,688 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:cluster="http://www.mulesoft.org/schema/mule/ee/cluster" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+    <http:listener-config name="HTTP_Listener_Configuration" host="0.0.0.0" port="8082" basePath="api" doc:name="HTTP Listener Configuration"/>
+    <http:request-config name="Anypoint_HTTPS_Connector" protocol="HTTPS" host="anypoint.mulesoft.com" port="443" doc:name="HTTP Request Configuration"/>
+   	<configuration defaultExceptionStrategy-ref="exception-handler" doc:name="Configuration">
+		<expression-language autoResolveVariables="false">
+			<import class="org.apache.commons.lang3.StringEscapeUtils"/>
+			<import class="org.apache.commons.io.FilenameUtils"/>
+		</expression-language>
+	</configuration>
+   	<context:property-placeholder location="config.properties"/>
+    <flow name="getApiPlatformMetrics">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/apiplatform/metrics" doc:name="HTTP"/>
+        <set-variable variableName="rootOrgId" value="${rootOrgId}" doc:name="rootOrgId"/>
+        <flow-ref name="getAnypointToken" doc:name="getAnypointToken"/>
+        <flow-ref name="getHierarchy" doc:name="getHierarchy"/>
+        <flow-ref name="getRuntimeAppsStats" doc:name="getRuntimeAppsStats"/>
+        <logger level="INFO" doc:name="Logger"/>
+        <set-variable variableName="policiesBesingUsedList" value="#[[]]" doc:name="initialize policiesBesingUsedList"/>
+        <scripting:component doc:name="initialize policyTemplateIdNameMap">
+            <scripting:script engine="Groovy"><![CDATA[java.util.HashMap<String,String> policyTemplateIdNameMap = new java.util.HashMap<String,String>()
+message.setInvocationProperty("policyTemplateIdNameMap",policyTemplateIdNameMap)
+return message]]></scripting:script>
+        </scripting:component>
+        <set-variable variableName="businessOrgs" value="#[new java.util.ArrayList()]" doc:name="instantiate businessOrgs"/>
+        <scripting:component doc:name="Script">
+            <scripting:script engine="Groovy"><![CDATA[java.util.ArrayList<com.xom.utils.BusinessOrg> businessOrgs = new java.util.ArrayList<com.xom.utils.BusinessOrg>()
+message.setInvocationProperty("businessOrgs",businessOrgs)
+return message]]></scripting:script>
+        </scripting:component>
+        <foreach collection="#[flowVars['orgIdList']]" doc:name="For Each">
+            <set-variable variableName="currentOrgId" value="#[payload]" doc:name="currentOrgId"/>
+            <set-variable variableName="currentOrgName" value="#[flowVars['orgIdNameMap'].get(flowVars['currentOrgId'])]" doc:name="currentOrgName"/>
+            <flow-ref name="getPolicyTemplates" doc:name="getPolicyTemplates"/>
+            <logger message="&quot;****policyTemplateIdNameMap****&quot;: #[flowVars.policyTemplateIdNameMap]" level="INFO" doc:name="Logger"/>
+            <flow-ref name="api-platform-usage-metricsSub_Flow" doc:name="api-platform-usage-metricsSub_Flow"/>
+        </foreach>
+        <flow-ref name="getTotalUsers" doc:name="getTotalUsers"/>
+        <flow-ref name="getApplications" doc:name="getApplications"/>
+        <flow-ref name="getTotalAssets" doc:name="getTotalAssets"/>
+        <scripting:component doc:name="Script">
+            <scripting:script engine="Groovy"><![CDATA[java.util.LinkedHashMap<String,Object> kpiResponseObject = new java.util.LinkedHashMap<String,Object>()
+java.util.ArrayList<com.xom.utils.BusinessOrg> businessOrgs = flowVars.businessOrgs
+java.util.ArrayList<String> policiesBeingUsed = new java.util.ArrayList<String>()
+java.util.ArrayList<HashMap<String,ArrayList<com.xom.utils.ApiMetadata>>> policyApiAssociationList = new java.util.ArrayList<HashMap<String,ArrayList<com.xom.utils.ApiMetadata>>>()
+HashMap<String,ArrayList<com.xom.utils.ApiMetadata>> policyApiAssociation = new HashMap<String,ArrayList<com.xom.utils.ApiMetadata>>()
+LinkedHashMap<String,Integer> exchangeAssets = new LinkedHashMap<String,Integer>()
+HashMap<String,HashMap<String,Integer>> cloudhubUsageStats = new HashMap<String,HashMap<String,Integer>>()
+
+flowVars.devCloudhubWorkerUsage.put("applicationCount",flowVars.devCloudhubAppsCount)
+flowVars.acceptanceCloudhubWorkerUsage.put("applicationCount",flowVars.acceptanceCloudhubAppsCount)
+flowVars.prodCloudhubWorkerUsage.put("applicationCount",flowVars.prodCloudhubAppsCount)
+
+cloudhubUsageStats.put("development",flowVars.devCloudhubWorkerUsage)
+cloudhubUsageStats.put("acceptance",flowVars.acceptanceCloudhubWorkerUsage)
+cloudhubUsageStats.put("production",flowVars.prodCloudhubWorkerUsage)
+
+HashMap<String,Integer> onPremStats = new HashMap<String,Integer>()
+onPremStats.put("development",devHybridAppsCount)
+onPremStats.put("acceptance",acceptanceHybridAppsCount)
+onPremStats.put("production",prodHybridAppsCount)
+
+exchangeAssets.put("Total",flowVars['custom-ExchangeAsset']+flowVars['soap-api-ExchangeAsset']+
+flowVars['rest-api-ExchangeAsset']+flowVars['raml-fragment-ExchangeAsset']+
+flowVars['template-ExchangeAsset']+flowVars['example-ExchangeAsset']+flowVars['connector-ExchangeAsset'])
+exchangeAssets.put("Custom",flowVars['custom-ExchangeAsset'])
+exchangeAssets.put("Soap APIs",flowVars['soap-api-ExchangeAsset'])
+exchangeAssets.put("REST APIs",flowVars['rest-api-ExchangeAsset'])
+exchangeAssets.put("RAML fragments",flowVars['raml-fragment-ExchangeAsset'])
+exchangeAssets.put("Templates",flowVars['template-ExchangeAsset'])
+exchangeAssets.put("Examples",flowVars['example-ExchangeAsset'])
+exchangeAssets.put("Connectors",flowVars['connector-ExchangeAsset'])
+
+
+
+int totalNumberOfAPIDefinitions = 0
+int totalTransactionsProcessed = 0
+int totalNumberOfUnsecureAPIs = 0
+int totalNumberOfUndocumentedAPIs = 0
+int totalNumberOfActiveAPIsInProduction = 0
+int totalNumberOfActiveAPIsInAcceptance = 0
+int totalNumberOfActiveAPIsInDevelopment = 0 
+
+
+int totalNumberOfProductionAPIsOnPrem = 0
+int totalNumberOfProductionAPIsInCloud = 0
+int totalNumberOfAcceptanceAPIsOnPrem = 0
+int totalNumberOfAcceptanceAPIsInCloud = 0
+int totalNumberOfDevelopmentAPIsOnPrem = 0
+int totalNumberOfDevelopmentAPIsInCloud = 0
+
+for(com.xom.utils.BusinessOrg businessOrg : businessOrgs){
+	totalNumberOfAPIDefinitions = totalNumberOfAPIDefinitions + businessOrg.getNumberOfAPIDefinitions()
+	totalTransactionsProcessed = totalTransactionsProcessed + businessOrg.getProcessedCalls()
+	totalNumberOfUnsecureAPIs = totalNumberOfUnsecureAPIs + businessOrg.getTotalNumberOfUnsecureAPIs() 
+	totalNumberOfUndocumentedAPIs = totalNumberOfUndocumentedAPIs + businessOrg.getTotalNumberOfUndocumentedAPIs()
+	totalNumberOfActiveAPIsInProduction = totalNumberOfActiveAPIsInProduction + businessOrg.getNumberOfActiveAPIsInProd()
+    totalNumberOfActiveAPIsInAcceptance = totalNumberOfActiveAPIsInAcceptance + businessOrg.getNumberOfActiveAPIsInAcceptance()
+    totalNumberOfActiveAPIsInDevelopment = totalNumberOfActiveAPIsInDevelopment + businessOrg.getNumberOfActiveAPIsInDev()
+    totalNumberOfProductionAPIsOnPrem = totalNumberOfProductionAPIsOnPrem + businessOrg.getProdAPIsOnPrem()
+    totalNumberOfProductionAPIsInCloud = totalNumberOfProductionAPIsInCloud + businessOrg.getProdAPIsInCloud()
+    totalNumberOfAcceptanceAPIsOnPrem = totalNumberOfAcceptanceAPIsOnPrem + businessOrg.getAcceptanceAPIsOnPrem()
+	totalNumberOfAcceptanceAPIsInCloud = totalNumberOfAcceptanceAPIsInCloud + businessOrg.getAcceptanceAPIsInCloud()
+	totalNumberOfDevelopmentAPIsOnPrem = totalNumberOfDevelopmentAPIsOnPrem + businessOrg.getDevAPIsOnPrem()
+	totalNumberOfDevelopmentAPIsInCloud = totalNumberOfDevelopmentAPIsInCloud + businessOrg.getDevAPIsInCloud()
+	if(businessOrg.getPoliciesBeingUsed().size > 0){
+	  for(String policy:businessOrg.getPoliciesBeingUsed()){
+	    if (!policiesBeingUsed.contains(policy)){
+	      policiesBeingUsed.add(policy)
+	    }
+	  }
+	}
+	
+} 
+
+HashMap<String,Integer> activeDevAPIs = new HashMap<String,Integer>()
+HashMap<String,Integer> activeAcceptanceAPIs = new HashMap<String,Integer>()
+HashMap<String,Integer> activeProdAPIs = new HashMap<String,Integer>()
+
+activeDevAPIs.put("total",totalNumberOfActiveAPIsInDevelopment)
+activeDevAPIs.put("on-prem",totalNumberOfDevelopmentAPIsOnPrem)
+activeDevAPIs.put("cloudhub",totalNumberOfDevelopmentAPIsInCloud)
+
+activeAcceptanceAPIs.put("total",totalNumberOfActiveAPIsInAcceptance)
+activeAcceptanceAPIs.put("on-prem",totalNumberOfAcceptanceAPIsOnPrem)
+activeAcceptanceAPIs.put("cloudhub",totalNumberOfAcceptanceAPIsInCloud)
+
+activeProdAPIs.put("total",totalNumberOfActiveAPIsInProduction)
+activeProdAPIs.put("on-prem",totalNumberOfProductionAPIsOnPrem)
+activeProdAPIs.put("cloudhub",totalNumberOfProductionAPIsInCloud)
+
+HashMap<String,HashMap<String,Integer>> developmentAPIs = new HashMap<String,HashMap<String,Integer>>()
+HashMap<String,HashMap<String,Integer>> acceptanceAPIs = new HashMap<String,HashMap<String,Integer>>()
+HashMap<String,HashMap<String,Integer>> prodAPIs = new HashMap<String,HashMap<String,Integer>>()
+
+developmentAPIs.put("development",activeDevAPIs)
+acceptanceAPIs.put("acceptance",activeAcceptanceAPIs)
+prodAPIs.put("production",activeProdAPIs)
+
+ArrayList<HashMap> activeApisAcrossEnvironments = new ArrayList<HashMap>()
+activeApisAcrossEnvironments.add(developmentAPIs)
+activeApisAcrossEnvironments.add(acceptanceAPIs)
+activeApisAcrossEnvironments.add(prodAPIs)
+
+if(policiesBeingUsed.size > 0){
+  for (String policy : policiesBeingUsed){
+  ArrayList<com.xom.utils.Api> apiList = new ArrayList<com.xom.utils.Api>()
+  	for(com.xom.utils.BusinessOrg businessOrg : businessOrgs){
+  	ArrayList<HashMap<String,com.xom.utils.Api>> apiVersions = businessOrg.getApiVersions()
+  		for (HashMap<String,com.xom.utils.Api> apiVersion : apiVersions){
+  			for (Map.Entry<String, Object> entry : apiVersion.entrySet()) {
+       			 com.xom.utils.Api api = entry.getValue();
+       			 ArrayList<String> apiPolicyList = api.getPoliciesApplied()
+       			 if(apiPolicyList.size() > 0){
+       		     	for (String apiPolicy : apiPolicyList){
+       		     		if(policy.equals(apiPolicy)){
+       		     		com.xom.utils.ApiMetadata apiMetadata = new com.xom.utils.ApiMetadata();
+       		     		apiMetadata.setApiName(api.getApiName())
+       		     		apiMetadata.setVersionName(api.getVersionName())
+       		     		apiMetadata.setOrgName(flowVars['orgIdNameMap'].get(api.getOrgId()))
+       		     			apiList.add(apiMetadata)
+       		     		}
+       		     	}
+       			 }
+   			 }
+  		  
+  		}
+  	}
+  	policyApiAssociation.put(policy,apiList)
+  }
+  policyApiAssociationList.add(policyApiAssociation)
+}
+
+kpiResponseObject.put("totalNumberOfBusinessOrgs",flowVars.businessOrgs.size())
+kpiResponseObject.put("totalNumberOfAPIDefinitions",totalNumberOfAPIDefinitions)
+kpiResponseObject.put("activeAPIs",activeApisAcrossEnvironments)
+kpiResponseObject.put("exchangeAssets",exchangeAssets)
+kpiResponseObject.put("totalNumberOfUsers",flowVars.usersTotal)
+kpiResponseObject.put("totalNumberOfClientApplications",flowVars.appsTotal)
+kpiResponseObject.put("onPremRuntimeUsageStatistics",onPremStats)
+kpiResponseObject.put("cloudhubUsageStatistics",cloudhubUsageStats)
+kpiResponseObject.put("totalTransactionsProcessed",totalTransactionsProcessed)
+kpiResponseObject.put("totalTransactionsProcessedInProduction","Work in progress")
+kpiResponseObject.put("totalTransactionsProcessedInAcceptance","Work in progress")
+kpiResponseObject.put("totalTransactionsProcessedInDevelopment","Work in progress")
+kpiResponseObject.put("policiesBeingUsed",policiesBeingUsed)
+kpiResponseObject.put("policyApiAssociationList",policyApiAssociationList)
+kpiResponseObject.put("totalNumberOfUnsecureAPIs",totalNumberOfUnsecureAPIs)
+kpiResponseObject.put("totalNumberOfUndocumentedAPIs",totalNumberOfUndocumentedAPIs)
+
+kpiResponseObject.put("businessOrgs",flowVars.businessOrgs)
+message.setInvocationProperty("kpiResponseObject",kpiResponseObject)
+return message]]></scripting:script>
+        </scripting:component>
+        <set-payload value="#[flowVars.kpiResponseObject]" doc:name="Set Payload"/>
+        <json:object-to-json-transformer doc:name="Object to JSON"/>  
+        <exception-strategy ref="exception-handler" doc:name="Reference Exception Strategy"/>
+    </flow>
+    <sub-flow name="getAnypointToken">
+    <enricher target="#[flowVars.anypointToken]" doc:name="Message Enricher">
+    <processor-chain doc:name="Processor Chain">
+        <set-payload value="username=${anypointUsername}&amp;password=${anypointPassword}" doc:name="setPayload"/>
+ 	    <set-property value="application/x-www-form-urlencoded" propertyName="Content-Type" doc:name="set Content-Type" />
+        <http:request config-ref="Anypoint_HTTPS_Connector" path="/accounts/login" method="POST" doc:name="getAnypointToken">
+        <http:success-status-code-validator values="0..499" />
+        </http:request>
+        <choice doc:name="Choice">
+                    <when expression="#[message.inboundProperties['http.status']=='200']">
+                        <json:json-to-object-transformer returnClass="java.util.Map" doc:name="JSON to Object"/>
+                        <logger message="response received from AnypointPlatform for getAnypointToken call #[payload]" level="INFO" doc:name="Logger"/>
+                        <set-payload value="#[payload.access_token]" doc:name="token" doc:description="exttracts the token from the JSON response and stores it in payload" />
+                    </when>
+                    <otherwise>
+                            <logger level="INFO" category="logger after getAnypointToken call" doc:name="Logger"/>
+                        <scripting:component doc:name="Script">
+                            <scripting:script engine="Groovy"><![CDATA[throw new RuntimeException('Non 200 response received from AnypointPlatform while requesting token, no token received, impossible to proceed')]]></scripting:script>
+                        </scripting:component>
+                    </otherwise>
+                </choice>
+                </processor-chain>
+                </enricher>
+    </sub-flow>
+    <sub-flow name="getHierarchy">
+         <http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.accountsApi.uri}/#[flowVars['rootOrgId']]/hierarchy" method="GET" doc:name="getOrgHierarchy">
+         <http:request-builder>
+                <http:header headerName="Authorization" value="Bearer #[flowVars['anypointToken']]"/>
+            </http:request-builder>
+            <http:success-status-code-validator values="0..499"/>
+         </http:request>
+ 		<json:json-to-object-transformer returnClass="java.util.HashMap" doc:name="JSON to Object"/>
+        <component class="com.xom.utils.HierarchyIterator" doc:name="IterateThroughOrgHierarchy"/>
+    </sub-flow>
+    <sub-flow name="api-platform-usage-metricsSub_Flow">
+    <message-properties-transformer scope="invocation" doc:name="Initialize Variables">
+            <add-message-property key="activeApisInDev" value="#[0]"/>
+            <add-message-property key="activeApisInAcceptance" value="#[0]"/>
+            <add-message-property key="activeApisInProd" value="#[0]"/>
+            <add-message-property key="devApisOnPrem" value="#[0]"/>
+            <add-message-property key="devApisInCloud" value="#[0]"/>
+            <add-message-property key="acceptanceApisOnPrem" value="#[0]"/>
+            <add-message-property key="acceptanceApisInCloud" value="#[0]"/>
+            <add-message-property key="prodApisOnPrem" value="#[0]"/>
+            <add-message-property key="prodApisInCloud" value="#[0]"/>
+           
+        </message-properties-transformer>
+        <scripting:component doc:name="initialize finalListOfAPIs">
+            <scripting:script engine="Groovy"><![CDATA[java.util.HashMap<String,com.xom.utils.Api> finalListOfAPIs = new java.util.HashMap<String,com.xom.utils.Api>()
+message.setInvocationProperty("finalListOfAPIs",finalListOfAPIs)
+return message]]></scripting:script>
+        </scripting:component>
+        <scripting:component doc:name="Script">
+            <scripting:script engine="Groovy"><![CDATA[ java.util.ArrayList<HashMap<String,com.xom.utils.Api>> apiVersions = new  java.util.ArrayList<HashMap<String,com.xom.utils.Api>>();
+ message.setInvocationProperty("apiVersions",apiVersions)
+return message]]></scripting:script>
+        </scripting:component>
+        <flow-ref name="getTransactions" doc:name="getTransactions"/>
+         <http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars['currentOrgId']]/apis" method="GET" doc:name="getApisPerOrg">
+            <http:request-builder>
+                <http:header headerName="Authorization" value="Bearer #[flowVars['anypointToken']]"/>
+            </http:request-builder>
+                <http:success-status-code-validator values="0..499"/>
+            </http:request>
+            <choice doc:name="isResponse200?">
+            <when expression="#[message.inboundProperties['http.status']=='200']">
+                <json:json-to-object-transformer returnClass="java.util.HashMap" doc:name="JSON to Object"/>
+                <component class="com.xom.utils.APIListIterator" doc:name="apiListIterator"/>
+                <foreach collection="#[flowVars['apiVersionIdList']]" doc:name="For Each">
+                <scripting:component doc:name="Script">
+                <scripting:script engine="Groovy"><![CDATA[for(Integer key:payload.keySet()){
+message.setInvocationProperty("apiVersionId",key)
+HashMap<String,Object> api=(HashMap<String,Object>) payload.get(key)
+for(String identifier:api.keySet()){
+if(identifier.equalsIgnoreCase("apiId")){
+message.setInvocationProperty("apiId",api.get(identifier))
+}
+if(identifier.equalsIgnoreCase("apiName")){
+message.setInvocationProperty("apiName",api.get(identifier))
+}
+if(identifier.equalsIgnoreCase("portalIsPublic")){
+message.setInvocationProperty("portalIsPublic",api.get(identifier))
+}
+}
+}
+return message]]></scripting:script>
+            </scripting:component>
+            <http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars['currentOrgId']]/apis/#[flowVars['apiId']]/versions/#[flowVars['apiVersionId']]" method="GET" doc:name="getApiVersions">
+                            <http:request-builder>
+                                <http:header headerName="Authorization" value="Bearer #[flowVars['anypointToken']]"/>
+                            </http:request-builder>
+                            <http:success-status-code-validator values="0..499"/>
+                        </http:request>
+            <json:json-to-object-transformer returnClass="java.util.HashMap" doc:name="JSON to Object"/>
+            <logger message="#[payload]" level="DEBUG" category="Response after the api, version call" doc:name="Logger"/>
+                <set-variable variableName="portalId" value="#[payload.portalId]" doc:name="set portalId"/>
+                <set-variable variableName="rootFileId" value="#[payload.rootFileId]" doc:name="set rootFileId"/>
+            <set-variable variableName="versionInfo" value="#[payload]" doc:name="set versionInfo"/>
+                    <flow-ref name="getPoliciesForAPIVersion" doc:name="getPoliciesForAPIVersion"/>
+            <http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars['currentOrgId']]/apis/#[flowVars['apiId']]/versions/#[flowVars['apiVersionId']]/users/owners" method="GET" doc:name="getApiVersionOwnerInfo">
+                        <http:request-builder>
+                            <http:header headerName="Authorization" value="Bearer #[flowVars['anypointToken']]"/>
+                        </http:request-builder>
+                        <http:success-status-code-validator values="0..499"/>
+                    </http:request>
+            <json:json-to-object-transformer returnClass="java.util.List" doc:name="JSON to Object"/>
+            <logger message="response from getOwners call #[payload] and apiVersion being processed #[flowVars.versionInfo]" level="DEBUG" category="response returned from the owners api call" doc:name="Logger"/>
+            <set-variable variableName="ownerInfo" value="#[payload]" doc:name="set OwnerInfo"/>
+            <component class="com.xom.utils.APIObjectParser" doc:name="Java"/>
+                </foreach>
+                <logger level="INFO" doc:name="Logger"/>
+                <scripting:component doc:name="Groovy">
+                    <scripting:script engine="Groovy"><![CDATA[java.util.ArrayList<HashMap<String,com.xom.utils.Api>> apiVersions = flowVars.apiVersions;
+apiVersions.add(flowVars.finalListOfAPIs);
+com.xom.utils.BusinessOrg businessOrg = new com.xom.utils.BusinessOrg();
+businessOrg.setBusinessOrgName(flowVars.currentOrgName);
+businessOrg.setBusinessOrgId(flowVars.currentOrgId);
+businessOrg.setProcessedCalls(flowVars.processedCalls);
+businessOrg.setBlockedCalls(flowVars.blockedCalls);
+businessOrg.setNumberOfAPIDefinitions(flowVars.finalListOfAPIs.size());
+businessOrg.setNumberOfActiveAPIsInDev(flowVars.activeApisInDev);
+businessOrg.setNumberOfActiveAPIsInAcceptance(flowVars.activeApisInAcceptance);
+businessOrg.setNumberOfActiveAPIsInProd(flowVars.activeApisInProd);
+
+businessOrg.setDevAPIsOnPrem(flowVars.devApisOnPrem);
+businessOrg.setDevAPIsInCloud(flowVars.devApisInCloud);
+businessOrg.setAcceptanceAPIsOnPrem(flowVars.acceptanceApisOnPrem);
+businessOrg.setAcceptanceAPIsInCloud(flowVars.acceptanceApisInCloud);
+businessOrg.setProdAPIsOnPrem(flowVars.prodApisOnPrem);
+businessOrg.setProdAPIsInCloud(flowVars.prodApisInCloud);
+
+int totalNumberOfUnsecureAPIs = 0
+int totalNumberOfUndocumentedAPIs = 0
+java.util.ArrayList<String> policiesBeingUsed= new ArrayList<String>()
+HashMap<String,com.xom.utils.Api> finalListOfAPIs = flowVars.finalListOfAPIs;
+for(com.xom.utils.Api api:finalListOfAPIs.values()){
+   if(!api.getIsSecure()){	
+	totalNumberOfUnsecureAPIs++
+	}
+	if(!api.getContainsPortal()){
+	 totalNumberOfUndocumentedAPIs++
+	}
+	if(api.getPoliciesApplied().size>0){
+		for(String policy:api.getPoliciesApplied()){
+			if(!policiesBeingUsed.contains(policy)){
+			  policiesBeingUsed.add(policy)
+			}
+		}
+	}
+}
+businessOrg.setTotalNumberOfUnsecureAPIs(totalNumberOfUnsecureAPIs);
+businessOrg.setTotalNumberOfUndocumentedAPIs(totalNumberOfUndocumentedAPIs);
+businessOrg.setApiVersions(flowVars.apiVersions);
+businessOrg.setPoliciesBeingUsed(policiesBeingUsed);
+message.setInvocationProperty("businessOrg",businessOrg)
+return message]]></scripting:script>
+                </scripting:component>
+                <expression-component doc:name="Expression"><![CDATA[#[flowVars.businessOrgs.add(flowVars.businessOrg)]]]></expression-component>
+            </when>
+            <otherwise>
+                <logger level="INFO" doc:name="Logger"/>
+            </otherwise>
+            </choice>
+        <!-- apiObjectList.put("env",message.getInvocationProperty("env").toString()) -->
+    </sub-flow>
+    <sub-flow name="getPoliciesForAPIVersion">
+        <http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars['currentOrgId']]/apis/#[flowVars['apiId']]/versions/#[flowVars['apiVersionId']]/policies" method="GET" doc:name="getPolicies">
+            <http:request-builder>
+                <http:header headerName="Authorization" value="Bearer #[flowVars['anypointToken']]"/>
+            </http:request-builder>
+            <http:success-status-code-validator values="0..499"/>
+        </http:request>
+        <choice doc:name="Choice">
+            <when expression="#[message.inboundProperties['http.status']=='200']">
+                <json:json-to-object-transformer returnClass="java.util.List" doc:name="JSON to Object"/>
+                <set-variable variableName="policyTemplates" value="#[payload]" doc:name="save get Policy call's response"/>
+            </when>
+            <otherwise>
+                <logger message="Http status from getPoliciesForAPIVersion call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger"/>
+            </otherwise>
+        </choice>
+    </sub-flow>
+    <sub-flow name="getTotalUsers">
+        <http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.accountsApi.uri}/#[flowVars['rootOrgId']]/members?limit=10&amp;amp;offset=0" method="GET" doc:name="getTotalUsers">
+            <http:request-builder>
+                <http:header headerName="Authorization" value="Bearer #[flowVars['anypointToken']]"/>
+            </http:request-builder>
+            <http:success-status-code-validator values="0..499"/>
+        </http:request>
+        <choice doc:name="Choice">
+            <when expression="#[message.inboundProperties['http.status']=='200']">
+                <json:json-to-object-transformer returnClass="java.util.HashMap" doc:name="JSON to Object"/>
+                <set-variable variableName="usersTotal" value="#[payload.total]" doc:name="usersTotal"/>
+            </when>
+            <otherwise>
+                <logger message="Http status from getTotalUsers call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger"/>
+            </otherwise>
+        </choice>
+    </sub-flow>
+    <sub-flow name="getApplications">
+        <http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars['rootOrgId']]/applications?ascending=true&amp;amp;limit=10&amp;amp;offset=0" method="GET" doc:name="getTotalApps">
+            <http:request-builder>
+                <http:header headerName="Authorization" value="Bearer #[flowVars['anypointToken']]"/>
+            </http:request-builder>
+            <http:success-status-code-validator values="0..499"/>
+        </http:request>
+        <choice doc:name="Choice">
+            <when expression="#[message.inboundProperties['http.status']=='200']">
+                <json:json-to-object-transformer returnClass="java.util.HashMap" doc:name="JSON to Object"/>
+                <set-variable variableName="appsTotal" value="#[payload.total]" doc:name="appsTotal"/>
+            </when>
+            <otherwise>
+                <logger message="Http status from getApplications call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger"/>
+            </otherwise>
+        </choice>
+    </sub-flow>
+    <sub-flow name="getTotalAssets">
+        <foreach collection="#[['custom','rest-api','soap-api','raml-fragment','connector','template','example']]" doc:name="For Each">
+            <set-variable variableName="assetType" value="#[payload]" doc:name="assetType"/>
+            <http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.exchange.uri}?search=&amp;type=#[flowVars.assetType]&amp;domain=&amp;organizationId=#[flowVars['rootOrgId']]" method="GET" doc:name="getTotalExchangeAssets">
+                <http:request-builder>
+                    <http:header headerName="Authorization" value="Bearer #[flowVars['anypointToken']]"/>
+                </http:request-builder>
+                <http:success-status-code-validator values="0..499"/>
+            </http:request>
+            <choice doc:name="Choice">
+                <when expression="#[message.inboundProperties['http.status']=='200']">
+                    <json:json-to-object-transformer returnClass="java.util.List" doc:name="JSON to Object"/>
+                    <set-variable variableName="#[flowVars.assetType+'-ExchangeAsset']" value="#[payload.size()]" doc:name="totalExchangeAssets"/>
+                </when>
+                <otherwise>
+                    <logger message="Http status from getTotalAssets call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger"/>
+                </otherwise>
+            </choice>
+        </foreach>
+    </sub-flow>
+    <sub-flow name="getRuntimeAppsStats">
+        <message-properties-transformer scope="invocation" doc:name="Message Properties">
+            <add-message-property key="acceptanceCloudhubAppsCount" value="#[0]"/>
+            <add-message-property key="prodCloudhubAppsCount" value="#[0]"/>
+            <add-message-property key="devHybridAppsCount" value="#[0]"/>
+            <add-message-property key="devCloudhubAppsCount" value="#[0]"/>
+            <add-message-property key="acceptanceHybridAppsCount" value="#[0]"/>
+            <add-message-property key="prodHybridAppsCount" value="#[0]"/>
+        </message-properties-transformer>
+        <scripting:component doc:name="Groovy">
+            <scripting:script engine="Groovy"><![CDATA[java.util.HashMap<String,Integer> devCloudhubWorkerUsage = new java.util.HashMap<String,Integer>()
+java.util.HashMap<String,Integer> acceptanceCloudhubWorkerUsage = new java.util.HashMap<String,Integer>()
+java.util.HashMap<String,Integer> prodCloudhubWorkerUsage = new java.util.HashMap<String,Integer>()
+java.util.ArrayList<String> devHybridAppNames = new java.util.ArrayList<String>()
+java.util.ArrayList<String> acceptanceHybridAppNames = new java.util.ArrayList<String>()
+java.util.ArrayList<String> prodHybridAppNames = new java.util.ArrayList<String>()
+java.util.ArrayList<String> devCloudhubAppNames = new java.util.ArrayList<String>()
+java.util.ArrayList<String> acceptanceCloudhubAppNames = new java.util.ArrayList<String>()
+java.util.ArrayList<String> prodCloudhubAppNames = new java.util.ArrayList<String>()
+message.setInvocationProperty("devCloudhubWorkerUsage",devCloudhubWorkerUsage)
+message.setInvocationProperty("acceptanceCloudhubWorkerUsage",acceptanceCloudhubWorkerUsage)
+message.setInvocationProperty("prodCloudhubWorkerUsage",prodCloudhubWorkerUsage)
+message.setInvocationProperty("devHybridAppNames",devHybridAppNames)
+message.setInvocationProperty("acceptanceHybridAppNames",acceptanceHybridAppNames)
+message.setInvocationProperty("prodHybridAppNames",prodHybridAppNames)
+message.setInvocationProperty("devCloudhubAppNames",devCloudhubAppNames)
+message.setInvocationProperty("acceptanceCloudhubAppNames",acceptanceCloudhubAppNames)
+message.setInvocationProperty("prodCloudhubAppNames",prodCloudhubAppNames)
+return message]]></scripting:script>
+        </scripting:component>
+        <foreach collection="#[['${devEnvironmentId}','${acceptanceEnvironmentId}','${prodEnvironmentId}']]" doc:name="For Each">
+            <set-variable variableName="envId" value="#[payload]" doc:name="set envId"/>
+            <http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.hybrid.uri}" method="GET" doc:name="getHybridApps">
+                <http:request-builder>
+                    <http:header headerName="Authorization" value="Bearer #[flowVars['anypointToken']]"/>
+                    <http:header headerName="X-ANYPNT-ORG-ID" value="#[flowVars['rootOrgId']]"/>
+                    <http:header headerName="X-ANYPNT-ENV-ID" value="#[flowVars['envId']]"/>
+                </http:request-builder>
+                <http:success-status-code-validator values="0..499"/>
+            </http:request>
+            <choice doc:name="Choice">
+                <when expression="#[message.inboundProperties['http.status']=='200']">
+                    <json:json-to-object-transformer returnClass="java.util.Map" doc:name="JSON to Object"/>
+                    <foreach collection="#[payload.data]" doc:name="For Each">
+                        <choice doc:name="Choice">
+                            <when expression="#[payload['lastReportedStatus'].equals(&quot;STARTED&quot;)]">
+                                <expression-component doc:name="Expression"><![CDATA[String envId = flowVars['envId'];
+if(envId.equals('e4ddc042-982c-4102-a693-f7f9afa04474')){
+int count = flowVars['devHybridAppsCount'];
+flowVars['devHybridAppsCount'] = count + 1;
+flowVars['devHybridAppNames'].add(payload.name);
+} else if(envId.equals('085c5130-8b8a-4ee4-a6aa-105c22fe027c')){
+int count = flowVars['acceptanceHybridAppsCount'];
+flowVars['acceptanceHybridAppsCount'] = count + 1;
+flowVars['acceptanceHybridAppNames'].add(payload.name);
+}else if (envId.equals('40a29608-476f-4846-92d6-4792da30c3af')){
+int count = flowVars['prodHybridAppsCount'];
+flowVars['prodHybridAppsCount'] = count + 1;
+flowVars['prodHybridAppNames'].add(payload.name);
+}]]></expression-component>
+                            </when>
+                            <otherwise>
+                                <logger message="deployment status is #[payload['lastReportedStatus']]" level="INFO" doc:name="Logger"/>
+                            </otherwise>
+                        </choice>
+                    </foreach>
+                </when>
+                <otherwise>
+                    <logger message="Http status from getHybridApps call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger"/>
+                </otherwise>
+            </choice>
+            <http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.cloudhub.uri}" method="GET" doc:name="getCloudhubApps">
+                <http:request-builder>
+                    <http:header headerName="Authorization" value="Bearer #[flowVars['anypointToken']]"/>
+                    <http:header headerName="X-ANYPNT-ENV-ID" value="#[flowVars['envId']]"/>
+                </http:request-builder>
+            </http:request>
+            <choice doc:name="Choice">
+                <when expression="#[message.inboundProperties['http.status']=='200']">
+                    <json:json-to-object-transformer returnClass="java.util.List" doc:name="JSON to Object"/>
+                    <foreach doc:name="For Each">
+                        <choice doc:name="Choice">
+                            <when expression="#[payload['status'].equals(&quot;STARTED&quot;)]">
+                                <expression-component doc:name="Expression"><![CDATA[String envId = flowVars['envId'];
+int workerCount = payload.workers;
+String workerType = payload.workerType;
+System.out.println(workerType+"\t"+workerCount+"\t"+envId + "\t"+flowVars['devCloudhubWorkerUsage']);
+if(envId.equals('e4ddc042-982c-4102-a693-f7f9afa04474')){
+int count = flowVars['devCloudhubAppsCount'];
+flowVars['devCloudhubAppsCount'] = count + 1;
+
+devCloudhubWorkerUsage = flowVars['devCloudhubWorkerUsage'];
+if(devCloudhubWorkerUsage.containsKey(workerType)){
+  int updatedCount = devCloudhubWorkerUsage.get(workerType) + workerCount;
+  devCloudhubWorkerUsage.put(workerType,updatedCount);
+}else{
+  devCloudhubWorkerUsage.put(workerType,workerCount)
+}
+flowVars['devCloudhubWorkerUsage'] = devCloudhubWorkerUsage;
+
+flowVars['devCloudhubAppNames'].add(payload.domain);
+} else if(envId.equals('085c5130-8b8a-4ee4-a6aa-105c22fe027c')){
+int count = flowVars['acceptanceCloudhubAppsCount'];
+flowVars['acceptanceCloudhubAppsCount'] = count + 1;
+
+acceptanceCloudhubWorkerUsage = flowVars['acceptanceCloudhubWorkerUsage'];
+if(acceptanceCloudhubWorkerUsage.containsKey(workerType)){
+  int updatedCount = acceptanceCloudhubWorkerUsage.get(workerType) + workerCount;
+  acceptanceCloudhubWorkerUsage.put(workerType,updatedCount);
+}else{
+  acceptanceCloudhubWorkerUsage.put(workerType,workerCount)
+}
+flowVars['acceptanceCloudhubWorkerUsage'] = acceptanceCloudhubWorkerUsage;
+
+flowVars['acceptanceCloudhubAppNames'].add(payload.domain);
+}else if (envId.equals('40a29608-476f-4846-92d6-4792da30c3af')){
+int count = flowVars['prodCloudhubAppsCount'];
+flowVars['prodCloudhubAppsCount'] = count + 1;
+
+prodCloudhubWorkerUsage = flowVars['prodCloudhubWorkerUsage'];
+if(prodCloudhubWorkerUsage.containsKey(workerType)){
+  int updatedCount = prodCloudhubWorkerUsage.get(workerType) + workerCount;
+  prodCloudhubWorkerUsage.put(workerType,updatedCount);
+}else{
+  prodCloudhubWorkerUsage.put(workerType,workerCount)
+}
+flowVars['prodCloudhubWorkerUsage'] = prodCloudhubWorkerUsage;
+
+flowVars['prodCloudhubAppNames'].add(payload.domain);
+
+} else {
+System.out.println("unknown environment");
+}]]></expression-component>
+                            </when>
+                            <otherwise>
+                                <logger level="INFO" doc:name="Logger"/>
+                            </otherwise>
+                        </choice>
+                    </foreach>
+                </when>
+                <otherwise>
+                    <logger message="Http status from getCloudhubApps call: #[message.inboundProperties['http.status']] , ignoring for now" level="INFO" doc:name="Logger"/>
+                </otherwise>
+            </choice>
+        </foreach>
+    </sub-flow>
+    <sub-flow name="getPolicyTemplates">
+        <http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars['currentOrgId']]/policy-templates" method="GET" doc:name="getPolicyTemplateNames">
+            <http:request-builder>
+                <http:header headerName="Authorization" value="Bearer #[flowVars['anypointToken']]"/>
+            </http:request-builder>
+            <http:success-status-code-validator values="0..499"/>
+        </http:request>
+        <choice doc:name="Choice">
+            <when expression="#[message.inboundProperties['http.status']=='200']">
+                <json:json-to-object-transformer returnClass="java.util.List" doc:name="JSON to Object"/>
+                <foreach collection="#[payload]" doc:name="For Each">
+                    <expression-component doc:name="Expression"><![CDATA[flowVars.policyTemplateIdNameMap.put(payload.id.toString(),payload.name)]]></expression-component>
+                </foreach>
+            </when>
+            <otherwise>
+                <logger message="Http status from getPolicyTemplates call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger"/>
+            </otherwise>
+        </choice>
+    </sub-flow>
+    <sub-flow name="getTransactions">
+        <set-variable variableName="processedCalls" value="#[0L]" doc:name="initialize processedCalls"/>
+            <set-variable variableName="blockedCalls" value="#[0L]" doc:name="initialize blockedCalls"/>
+            <logger message="${anypoint.analytics.uri}/#[flowVars['currentOrgId']]/query and token is #[flowVars['anypointToken']]" level="INFO" doc:name="Logger"/>
+            <set-payload value="{&quot;type&quot;:&quot;enriched-http-event&quot;,&quot;duration&quot;:&quot;90d&quot;,&quot;aggregators&quot;:[{&quot;dimension&quot;:&quot;request_disposition&quot;,&quot;limit&quot;:5,&quot;order&quot;:&quot;descending&quot;}]}" doc:name="Set Payload"/>
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Content-Type"/>
+                        <http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.analytics.uri}/#[flowVars['currentOrgId']]/query" method="POST" doc:name="GetAPICallMetricsForCurrentSubOrg">
+            <http:request-builder>
+                <http:header headerName="Authorization" value="Bearer #[flowVars['anypointToken']]"/>
+            </http:request-builder>
+                            <http:success-status-code-validator values="0..500"/>
+                        </http:request>
+                    <object-to-string-transformer doc:name="Object to String"/>
+                        <choice doc:name="isStatus200?">
+                        <when expression="#[message.inboundProperties['http.status']=='200']">
+                            <logger message="${anypoint.analytics.uri}/#[flowVars['currentOrgId']]/query and token is #[flowVars['anypointToken']] and Response code is #[message.inboundProperties['http.status']] and response is #[payload]" level="INFO" doc:name="Logger"/>
+                    <component class="com.xom.utils.ParseJson" doc:name="Java"/>
+                        </when>
+                        <otherwise>
+                            <logger message="Response code is #[message.inboundProperties['http.status']] and response is #[payload]" level="ERROR" doc:name="Logger"/>
+                        </otherwise>
+                    </choice>
+        <!-- <component class="com.xom.utils.LongPrettyFormatter" doc:name="Java"/> -->
+    </sub-flow> 
+    <sub-flow name="addScriptUserToOrgAdminRole">
+    <set-variable variableName="currentOrgId" value="#[payload]" doc:name="Variable" />
+    <http:request config-ref="Anypoint_HTTPS_Connector" path="accounts/api/organizations/#[flowVars['currentOrgId']]/rolegroups" method="GET" doc:name="getRoles">
+            <http:request-builder>
+                <http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]"/>
+            </http:request-builder>
+            <http:success-status-code-validator values="0..499"/>
+        </http:request>
+        <choice doc:name="Choice">
+                    <when expression="#[message.inboundProperties['http.status']=='200']">
+                        <logger message="response received from AnypointPlatform for get Role groups Call #[payload.toString()]" level="INFO" doc:name="Logger"/>
+                    	<json:json-to-object-transformer returnClass="java.util.Map" doc:name="JSON to Object"/>
+        <foreach collection="#[payload.data]" doc:name="Iterate through Roles to Pick required Roles">
+        <choice doc:name="Choice">
+                <when expression="#[payload.name.equals(&quot;Organization Administrators&quot;)]">
+                    <set-variable variableName="orgAdminRoleId" value="#[payload.role_group_id]" doc:name="orgAdminRoleId"/>
+                </when>
+                <otherwise>
+                <logger level="INFO" message="role group not Org admin, ignore" doc:name="Logger"></logger>
+                </otherwise>
+        </choice>
+        </foreach>
+        <set-payload doc:name="Set Payload" value="{&quot;organizationId&quot;:&quot;#[flowVars.currentOrgId]&quot;,&quot;userId&quot;:&quot;${anypointUserId}&quot;,&quot;roleGroupId&quot;:&quot;#[flowVars.orgAdminRoleId]&quot;}"/>
+        <http:request config-ref="Anypoint_HTTPS_Connector" path="accounts/api/organizations/#[flowVars['currentOrgId']]/rolegroups/#[flowVars['orgAdminRoleId']]/users/${anypointUserId}" method="POST" doc:name="addUserToOrgAdminRole">
+            <http:request-builder>
+                <http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]"/>
+            </http:request-builder>
+            <http:success-status-code-validator values="0..499"/>
+        </http:request>
+        <choice doc:name="Choice">
+                    <when expression="#[message.inboundProperties['http.status']=='200']">
+                        <logger message="response received from AnypointPlatform for add user to Org AdminCall #[payload]" level="INFO" doc:name="Logger"/>
+                    </when>
+                    <otherwise>
+                            <logger level="INFO" category="logger after add user to Org Admin call" doc:name="Logger"/>
+                        <scripting:component doc:name="Script">
+                            <scripting:script engine="Groovy"><![CDATA[throw new RuntimeException('Non 200 response received from AnypointPlatform while adding user to OrgAdminRole, impossible to proceed')]]></scripting:script>
+                        </scripting:component>
+                    </otherwise>
+                </choice>
+                    </when>
+                    <otherwise>
+                            <logger level="INFO" category="logger after get Role groups call" doc:name="Logger"/>
+                        <scripting:component doc:name="Script">
+                            <scripting:script engine="Groovy"><![CDATA[throw new RuntimeException('Non 200 response received from AnypointPlatform for get role groups call, impossible to proceed')]]></scripting:script>
+                        </scripting:component>
+                    </otherwise>
+                </choice>
+    </sub-flow>  
+</mule>
