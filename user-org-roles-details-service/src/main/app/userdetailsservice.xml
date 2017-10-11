@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:api-platform-gw="http://www.mulesoft.org/schema/mule/api-platform-gw" xmlns:context="http://www.springframework.org/schema/context" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/api-platform-gw http://www.mulesoft.org/schema/mule/api-platform-gw/current/mule-api-platform-gw.xsd">
+    <http:request-config name="Anypoint_HTTPS_Connector" protocol="HTTPS" host="anypoint.mulesoft.com" port="443" doc:name="HTTP Request Configuration">
+    </http:request-config>
+    <context:property-placeholder location="config.properties"/>
+    <configuration defaultExceptionStrategy-ref="exception-handler" doc:name="Configuration">
+		<expression-language autoResolveVariables="false">
+			<import class="org.apache.commons.lang3.StringEscapeUtils"/>
+			<import class="org.apache.commons.io.FilenameUtils"/>
+		</expression-language>
+	</configuration>
+    <api-platform-gw:api apiName="${api.name}" version="${api.version}" flowRef="Receiver" create="false" doc:name="API Autodiscovery"/>
+    <http:listener-config name="HTTP_Listener_Configuration" host="0.0.0.0" port="8082" doc:name="HTTP Listener Configuration"/>
+    <flow name="Receiver">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/details/*" doc:name="HTTP"/>
+        <choice doc:name="Choice">
+            <when expression="#[message.inboundProperties['http.relative.path'].contains('user')]">
+                <flow-ref name="userDetailsService" doc:name="userDetailsService"/>
+            </when>
+            <when expression="#[message.inboundProperties['http.relative.path'].contains('orgs')]">
+                <flow-ref name="orgDetailsService" doc:name="orgDetailsService"/>
+            </when>
+            <otherwise>
+                <logger message="No route defined" level="INFO" doc:name="Logger"/>
+            </otherwise>
+        </choice>
+        <exception-strategy ref="exception-handler" doc:name="Reference Exception Strategy"/>
+    </flow>
+    <sub-flow name="userDetailsService">
+        <logger level="INFO" doc:name="Logger"/>
+        <set-variable variableName="userName" value="#[message.inboundProperties['http.query.params']['userName']]" doc:name="userName"/>
+        <set-variable variableName="rootOrgId" value="${rootOrgId}" doc:name="rootOrgId"/>
+        <flow-ref name="getAnypointToken" doc:name="getAnypointToken"/>
+        <flow-ref name="getHierarchy" doc:name="getHierarchy"/>
+        <flow-ref name="getAnypointUserId" doc:name="getAnypointUserId"/>
+        <choice doc:name="Choice">
+            <when expression="#[flowVars.userId.get('userId').equals('NA')]">
+                <logger message="userId not found" level="INFO" doc:name="Logger"/>
+                <set-payload value="{&quot;message&quot;:&quot;User Not Found. Please try again after login&quot;}" doc:name="Set Payload"/>
+                <set-property propertyName="Content-Type" value="application/json" doc:name="Content-Type"/>
+            </when>
+            <otherwise>
+                <logger message="userId Found #[flowVars.userId.get('userId')]" level="INFO" doc:name="Logger"/>
+                <set-variable variableName="userId" value="#[flowVars.userId.get('userId')]" doc:name="extract userId"/>
+                <set-variable variableName="userGroupMappings" value="#[new java.util.ArrayList()]" doc:name="initialize userGroupMappings"/>
+                <foreach collection="#[flowVars['orgIdList']]" doc:name="For Each">
+                    <set-variable variableName="subOrgToRoleGroupMap" value="#[new java.util.HashMap()]" doc:name="initialize subOrgToRoleGroupMap"/>
+                    <set-variable variableName="currentOrgId" value="#[payload]" doc:name="currentOrgId"/>
+                    <set-variable variableName="currentOrgName" value="#[flowVars['orgIdNameMap'].get(flowVars['currentOrgId'])]" doc:name="currentOrgName"/>
+                    <flow-ref name="getRoleGroupsAssignmentPerOrg" doc:name="getRoleGroupsAssignmentPerOrg"/>
+                    <expression-component doc:name="Expression"><![CDATA[flowVars['subOrgToRoleGroupMap'].put(flowVars.currentOrgName,flowVars.roleGroupNames);
+flowVars['userGroupMappings'].add(flowVars['subOrgToRoleGroupMap'])]]></expression-component>
+                </foreach>
+                <set-payload value="#[flowVars.userGroupMappings]" doc:name="Set Payload"/>
+                <json:object-to-json-transformer doc:name="Object to JSON"/>
+            </otherwise>
+        </choice>
+    </sub-flow>
+    <sub-flow name="orgDetailsService">
+        <set-variable variableName="rootOrgId" value="${rootOrgId}" doc:name="rootOrgId"/>
+        <flow-ref name="getAnypointToken" doc:name="getAnypointToken"/>
+        <flow-ref name="getHierarchy" doc:name="getHierarchy"/>
+        <set-variable variableName="orgsToRoleGroupAndExternalNameMapList" value="#[new java.util.ArrayList()]" doc:name="orgsToRoleGroupAndExternalNameMapList"/>
+        <foreach collection="#[flowVars['orgIdList']]" doc:name="For Each">
+            <set-variable variableName="currentOrgId" value="#[payload]" doc:name="currentOrgId"/>
+            <set-variable variableName="currentOrgName" value="#[flowVars['orgIdNameMap'].get(flowVars['currentOrgId'])]" doc:name="currentOrgName"/>
+            <set-variable variableName="orgToRoleGroupAndExternalNameMap" value="#[[:]]" doc:name="orgToRoleGroupAndExternalNameMap"/>
+            <flow-ref name="getRoleGroupIdsForDifferentRoles" doc:name="getRoleGroupIdsForDifferentRoles"/>
+            <expression-component doc:name="Expression"><![CDATA[flowVars['orgToRoleGroupAndExternalNameMap'].put(flowVars.currentOrgName,flowVars.roleGroupExternalNameMap)
+]]></expression-component>
+            <expression-component doc:name="Expression"><![CDATA[flowVars.orgsToRoleGroupAndExternalNameMapList.add(flowVars.orgToRoleGroupAndExternalNameMap)
+]]></expression-component>
+        </foreach>
+        <set-payload value="#[flowVars.orgsToRoleGroupAndExternalNameMapList]" doc:name="Set Payload"/>
+        <json:object-to-json-transformer doc:name="Object to JSON"/>
+    </sub-flow>
+    <sub-flow name="getAnypointToken">
+    <enricher target="#[flowVars.anypointToken]" doc:name="Message Enricher">
+    <processor-chain doc:name="Processor Chain">
+        <set-payload value="username=${anypoint.username}&amp;password=${anypoint.password}" doc:name="setPayload"/>
+ 	    <set-property value="application/x-www-form-urlencoded" propertyName="Content-Type" doc:name="set Content-Type" />
+        <http:request config-ref="Anypoint_HTTPS_Connector" path="/accounts/login" method="POST" doc:name="getAnypointToken">
+        <http:success-status-code-validator values="0..499" />
+        </http:request>
+        <choice doc:name="Choice">
+                    <when expression="#[message.inboundProperties['http.status']=='200']">
+                        <json:json-to-object-transformer returnClass="java.util.Map" doc:name="JSON to Object"/>
+                        <logger message="response received from AnypointPlatform for getAnypointToken call #[payload]" level="INFO" doc:name="Logger"/>
+                        <set-payload value="#[payload.access_token]" doc:name="token" doc:description="exttracts the token from the JSON response and stores it in payload" />
+                    </when>
+                    <otherwise>
+                            <logger level="INFO" category="logger after getAnypointToken call" doc:name="Logger"/>
+                        <scripting:component doc:name="Script">
+                            <scripting:script engine="Groovy"><![CDATA[throw new RuntimeException('Non 200 response received from AnypointPlatform while requesting token, no token received, impossible to proceed')]]></scripting:script>
+                        </scripting:component>
+                    </otherwise>
+                </choice>
+                </processor-chain>
+                </enricher>
+    </sub-flow>
+    <sub-flow name="getHierarchy">
+         <http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.accountsApi.uri}/#[flowVars['rootOrgId']]/hierarchy" method="GET" doc:name="getOrgHierarchy">
+         <http:request-builder>
+                <http:header headerName="Authorization" value="Bearer #[flowVars['anypointToken']]"/>
+            </http:request-builder>
+            <http:success-status-code-validator values="0..499"/>
+         </http:request>
+ 		<json:json-to-object-transformer returnClass="java.util.HashMap" doc:name="JSON to Object"/>
+        <component class="com.xom.utils.HierarchyIterator" doc:name="IterateThroughOrgHierarchy"/>
+    </sub-flow>
+    <sub-flow name="getAnypointUserId">
+    <enricher target="#[flowVars.userId]" doc:name="Message Enricher">
+    <processor-chain doc:name="Processor Chain">
+        <http:request config-ref="Anypoint_HTTPS_Connector" path="accounts/api/organizations/${rootOrgId}/members" method="GET" doc:name="getIdOfTheUser">
+            <http:request-builder>
+                        <http:query-param paramName="search" value="#[flowVars.userName]"/>
+                        <http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]"/>
+            </http:request-builder>
+            <http:success-status-code-validator values="0..499"/>
+        </http:request>
+        <choice doc:name="Choice">
+                    <when expression="#[message.inboundProperties['http.status']=='200']">
+                        <json:json-to-object-transformer returnClass="java.util.Map" doc:name="JSON to Object"/>
+                        <logger message="response received from AnypointPlatform for getOwnerId call #[payload]" level="INFO" doc:name="Logger"/>
+                <choice doc:name="Choice">
+                    <when expression="#[payload.total != 0]">
+                                <set-payload value="#[['userId':payload.data[0].id]]" doc:name="userId"/>
+                    </when>
+                    <otherwise>
+                                <set-payload value="#[['userId':'NA']]" doc:name="Set Payload"/>
+                    </otherwise>
+                </choice>
+                    </when>
+                    <otherwise>
+                            <logger level="ERROR" category="logger after getOwnerId call" doc:name="Logger"/>
+                        <scripting:component doc:name="Script">
+                            <scripting:script engine="Groovy"><![CDATA[throw new RuntimeException('Non 200 response received from AnypointPlatform while requesting owner info impossible to proceed')]]></scripting:script>
+                        </scripting:component>
+                    </otherwise>
+                </choice>
+                </processor-chain>
+                </enricher>
+    </sub-flow>
+    <sub-flow name="getRoleGroupsAssignmentPerOrg">
+        <set-variable variableName="roleGroupNames" value="#[new java.util.ArrayList()]" doc:name="initialize roleGroupNames"/>
+        <http:request config-ref="Anypoint_HTTPS_Connector" path="accounts/api/organizations/#[flowVars['currentOrgId']]/users/#[flowVars['userId']]/rolegroups" method="GET" doc:name="getRoleGroupsAssignmentPerOrg">
+            <http:request-builder>
+                <http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]"/>
+            </http:request-builder>
+            <http:success-status-code-validator values="0..499"/>
+        </http:request>
+        <choice doc:name="Choice">
+            <when expression="#[message.inboundProperties['http.status']=='200']">
+                <json:json-to-object-transformer returnClass="java.util.Map" doc:name="JSON to Object"/>
+                <logger message="response received from Anypoint platform after getRoleGroupsAssignmentPerOrg call: #[payload]" level="INFO" doc:name="Logger"/>
+                <choice doc:name="Choice">
+                    <when expression="#[payload.total != 0]">
+                        <foreach collection="#[payload.data]" doc:name="For Each">
+                            <expression-component doc:name="Expression"><![CDATA[flowVars.roleGroupNames.add(payload.name)]]></expression-component>
+                        </foreach>
+                    </when>
+                    <otherwise>
+                        <logger message="user not associated to any role groups for the org #[flowVars['currentOrgId']]" level="INFO" doc:name="Logger"/>
+                    </otherwise>
+                </choice>
+            </when>
+            <otherwise>
+                <logger message="Http status from getRoleGroupsAssignmentPerOrg call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger"/>
+            </otherwise>
+        </choice>
+    </sub-flow>
+    <sub-flow name="getRoleGroupIdsForDifferentRoles">
+        <http:request config-ref="Anypoint_HTTPS_Connector" path="accounts/api/organizations/#[flowVars['currentOrgId']]/rolegroups" method="GET" doc:name="getRoles">
+            <http:request-builder>
+                <http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]"/>
+            </http:request-builder>
+            <http:success-status-code-validator values="0..499"/>
+        </http:request>
+        <choice doc:name="Choice">
+            <when expression="#[message.inboundProperties['http.status']=='200']">
+                <json:json-to-object-transformer returnClass="java.util.Map" doc:name="JSON to Object"/>
+                <set-variable variableName="roleGroupExternalNameMap" value="#[new java.util.ArrayList()]" doc:name="roleGroupIdList"/>
+                <foreach collection="#[payload.data]" doc:name="Iterate through Roles to Pick required Roles">
+                    <set-variable variableName="temp" value="#[[payload.name : payload.external_names]]" doc:name="temp"/>
+                    <expression-component doc:name="Expression"><![CDATA[#[flowVars.roleGroupExternalNameMap.add(flowVars.temp)]]]></expression-component>
+                </foreach>
+            </when>
+            <otherwise>
+                <logger message="Http status from getRoles call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger"/>
+            </otherwise>
+        </choice>
+    </sub-flow>
+</mule>
