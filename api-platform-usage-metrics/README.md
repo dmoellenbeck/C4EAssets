@@ -22,6 +22,7 @@ curl -X GET http://localhost:8082/api/apiplatform/metrics
 
 ```
 
+<details><summary>Sample Response</summary><p>
 # Sample Response
 
 ```
@@ -2806,36 +2807,23 @@ curl -X GET http://localhost:8082/api/apiplatform/metrics
     ]
 }
 ```
+</p></details>
 
 # Config.properties - Please fill the properties file (under src/main/resources) with appropriate values
 
 ```
+anypointUsername=<anypoint platform username>
+anypointPassword=<anypoint platform password>
 rootOrgId=<plugin the root organization Id>
-username=<anypoint platform username>
-password=<anypoint platform password>
-emailUsername=<username to be used for email>
-emailPassword=<password to be used for email>
-emailFrom=<address of the sender>
-emailTo=<address of the recipient>
+devEnvironmentId=<id of the dev environment>
+acceptanceEnvironmentId=<id of the acceptance environment>
+prodEnvironmentId=<id of the production environment>
+
+anypoint.accountsApi.uri=accounts/api/organizations
+anypoint.apiplatform.uri=apiplatform/repository/v2/organizations
+anypoint.analytics.uri=analytics/1.0
+anypoint.exchange.uri=exchange/api/v1/assets
+anypoint.hybrid.uri=hybrid/api/v1/applications
+anypoint.cloudhub.uri=cloudhub/api/applications
 ```
 
-# Expected Output 
-
-A business group with name that was provided as part of the input request's businessGroupName element is created on Anypoint platform.
-
-![newBusinessOrg](https://github.com/mulesoft-consulting/C4EAssets/blob/master/images/newBusinessOrg.png)
-
-Assuming the customer's organization is a federated org, you should expect to see the roles (orgAdmin and apiCreator in this case) have been populated with corresponding values
-that were provided as part of the input.
-
-![externalGroupMapping](https://github.com/mulesoft-consulting/C4EAssets/blob/master/images/externalGroupMapping.png)
-
-# Email Snapshot
-
-<embed src="https://github.com/mulesoft-consulting/C4EAssets/blob/master/images/EmailTemplate.pdf" width="500" height="375" type='application/pdf'>
-
-<object data="https://github.com/mulesoft-consulting/C4EAssets/blob/master/images/EmailTemplate.pdf" type="application/pdf" width="700px" height="700px">
-    <embed src="https://github.com/mulesoft-consulting/C4EAssets/blob/master/images/EmailTemplate.pdf">
-        This browser does not support PDFs. Please download the PDF to view it: <a href="https://github.com/mulesoft-consulting/C4EAssets/blob/master/images/EmailTemplate.pdf">Download PDF</a>.</p>
-    </embed>
-</object>
