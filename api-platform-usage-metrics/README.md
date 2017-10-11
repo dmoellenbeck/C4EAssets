@@ -22,8 +22,7 @@ curl -X GET http://localhost:8082/api/apiplatform/metrics
 
 ```
 
-<details><summary>Sample Response</summary><p>
-# Sample Response
+<details><summary><b>Sample Response</b></summary><p>
 
 ```
 {
