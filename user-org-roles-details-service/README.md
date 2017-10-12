@@ -1,9 +1,17 @@
 # user-org-roles-details-service
+
+# Why???
+Typically in large organizations, we have seen that the process to get on-boarded to the Anypoint platform happens via a front end/form/web-site. 
+This front-end typically gathers details about business org name that needs to be created, external group map names for the roles etc..
+In order to provide personalized service to an existing user based on their username/profile or a for a new user to find out if his/her business-org has
+already been on-boarded and if so, find out what are the external group names for each of the roles, there is a need for a service that leverages
+the Anypoint platform apis and returns that information. This service does exactly that.
+
 This service has two endpoints:
 
-* To return the business organizations that the user is part of and the roles that the user is assigned to within each business org
+# To return the business organizations that the user is part of and the roles that the user is assigned to within each business org
 
-Sample Request
+#Sample Request
 
 ```
 
@@ -11,7 +19,7 @@ curl -X GET 'http://localhost:8082/details/user?userName=skparna%40NA.XOM.COM'
 
 ```
 
-Sample Response
+#Sample Response
 
 ```
 [
@@ -97,16 +105,16 @@ Sample Response
 ]
 ```
 
-* To return the Business organizations and the different roles per business-org with corresponding external group names if applicable
+# To return the Business organizations and the different roles per business-org with corresponding external group names if applicable
 
 
-Sample Request
+# Sample Request
 
 ```
 curl -X GET http://localhost:8082/details/orgs
 ```
 
-Sample Response
+# Sample Response
 
 ```
 [
