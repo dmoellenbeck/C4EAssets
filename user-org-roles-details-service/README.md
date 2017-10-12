@@ -11,7 +11,7 @@ This service has two endpoints:
 
 # To return the business organizations that the user is part of and the roles that the user is assigned to within each business org
 
-#Sample Request
+# Sample Request
 
 ```
 
@@ -19,7 +19,7 @@ curl -X GET 'http://localhost:8082/details/user?userName=skparna%40NA.XOM.COM'
 
 ```
 
-#Sample Response
+# Sample Response
 
 ```
 [
