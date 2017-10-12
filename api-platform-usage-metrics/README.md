@@ -2826,5 +2826,5 @@ anypoint.hybrid.uri=hybrid/api/v1/applications
 anypoint.cloudhub.uri=cloudhub/api/applications
 ```
 
-Please click [here](https://drive.google.com/a/mulesoft.com/file/d/0BxzsWaGWKHjiWnNMTkNOMGhqbkE/view?usp=sharing) to view a demo of this Service.
+# Please click [here](https://drive.google.com/a/mulesoft.com/file/d/0BxzsWaGWKHjiWnNMTkNOMGhqbkE/view?usp=sharing) to view a demo of this Service.
 
