@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:mock="http://www.mulesoft.org/schema/mule/mock" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:munit="http://www.mulesoft.org/schema/mule/munit" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:core="http://www.mulesoft.org/schema/mule/core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/mock http://www.mulesoft.org/schema/mule/mock/current/mule-mock.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd">
+    <munit:config name="munit" doc:name="MUnit configuration"/>
+    <spring:beans>
+        <spring:import resource="classpath:global.xml" />
+        <spring:import resource="classpath:implementation.xml" />
+        <spring:import resource="classpath:common.xml" />
+    </spring:beans>
+    <munit:test name="get-employees-accept-json-test" description="Test">
+        <mock:when messageProcessor=".*:.*" doc:name="mock - database query">
+            <mock:with-attributes>
+                <mock:with-attribute name="doc:name" whereValue="#['GET employees']"/>
+            </mock:with-attributes>
+            <mock:then-return payload="#[[{'no': 1, 'dob': '1985-09-02T00:00:00', 'first_name': 'Chava', 'last_name': 'Puckett', 'gender': 'F', 'hire_date': '2008-10-12T00:00:00'}]]"/>
+        </mock:when>
+        <munit:set payload="#[]" doc:name="Set 'Accept' header">
+            <munit:inbound-properties>
+                <munit:inbound-property key="accept" value="application/json"/>
+            </munit:inbound-properties>
+        </munit:set>
+        <flow-ref name="get-employees-flow" doc:name="get-employees-flow"/>
+        <object-to-string-transformer doc:name="http response to string"/>
+        <munit:assert-on-equals message="The response payload is not correct!" expectedValue="#[getResource('scaffolder/response/get_200_employees_application_json.json').asString()]" actualValue="#[payload]" doc:name="assert that - payload is as expected" />
+    </munit:test>
+    <munit:test name="get-employees-accept-xml-test" description="Test">
+        <mock:when messageProcessor=".*:.*" doc:name="mock - database query">
+            <mock:with-attributes>
+                <mock:with-attribute name="doc:name" whereValue="#['GET employees']"/>
+            </mock:with-attributes>
+            <mock:then-return payload="#[[{'no': 1, 'dob': '1985-09-02T00:00:00', 'first_name': 'Chava', 'last_name': 'Puckett', 'gender': 'F', 'hire_date': '2008-10-12T00:00:00'}]]"/>
+        </mock:when>
+        <munit:set payload="#[]" doc:name="Set 'Accept' header">
+            <munit:inbound-properties>
+                <munit:inbound-property key="accept" value="application/xml"/>
+            </munit:inbound-properties>
+        </munit:set>
+        <flow-ref name="get-employees-flow" doc:name="get-employees-flow"/>
+        <object-to-string-transformer doc:name="http response to string"/>
+        <munit:assert-on-equals message="The response payload is not correct!" expectedValue="#[getResource('scaffolder/response/get_200_employees_application_xml.txt').asString()]" actualValue="#[payload]" doc:name="assert that - payload is as expected" />
+    </munit:test>
+    <munit:test name="post-employee-test" description="MUnit Test">
+        <mock:when messageProcessor=".*:.*" doc:name="mock - database insert">
+            <mock:with-attributes>
+                <mock:with-attribute name="doc:name" whereValue="#['Create employee']"/>
+            </mock:with-attributes>
+            <mock:then-return payload="#[[{'GENERATED_KEYS': 110}]]"/>
+        </mock:when>
+        <munit:set payload="#[getResource('scaffolder/request/post_employees_application_json.json').asString()]" doc:name="Set request message">
+            <munit:inbound-properties>
+                <munit:inbound-property key="origin" value="http://127.0.0.1:8081"/>
+                <munit:inbound-property key="http.relative.path" value="/api/employees"/>
+            </munit:inbound-properties>
+        </munit:set>
+        <flow-ref name="post-employee-flow" doc:name="post-employee-flow"/>
+        <munit:assert-on-equals message="The HTTP Location header is not correct!" expectedValue="#['http://127.0.0.1:8081/api/employees/110']" actualValue="#[message.outboundProperties.Location]" doc:name="assert that - http Location header is correct"/>
+    </munit:test>
+    <munit:test name="delete-employee-test" description="MUnit Test">
+        <mock:when messageProcessor=".*:.*" doc:name="mock - database delete">
+            <mock:with-attributes>
+                <mock:with-attribute name="doc:name" whereValue="#['Delete employee']"/>
+            </mock:with-attributes>
+            <mock:then-return payload="#[1]"/>
+        </mock:when>
+        <flow-ref name="delete-employee-flow" doc:name="delete-employee-flow"/>
+        <munit:assert-true message="The HTTP Status code is not correct!" condition="#[messageOutboundProperty('http.status').is(eq(204))]" doc:name="assert that - http.status eq 204" />
+    </munit:test>
+</mule>

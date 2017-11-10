@@ -1,0 +1,106 @@
+#%RAML 1.0
+version: v1
+title: Company Employees API
+mediaType: application/json
+baseUri: http://localhost:8081/api/v1
+
+documentation: 
+  - !include documentation/documentation.raml 
+
+types: 
+  Employee: !include datatypes/Employee.raml
+  CustomErrorMessage: !include datatypes/CustomErrorMessage.raml
+
+/employees:
+  post:
+    description: Add a new Employee
+    displayName: Add a new Employee
+    body: 
+      type: Employee
+      example: !include examples/EmployeeExample.raml
+    responses: 
+      201:
+        headers: 
+          Location:
+            description: URL of the new Employee information
+            example: /employees/1011 
+      500:
+        body: 
+          type: CustomErrorMessage
+          example: !include examples/InternalServerErrorExample.raml
+  get:
+    description: Retrieve a list of employees
+    displayName: Get all employees
+    headers: 
+      Accept?:
+        description: Specify the media type of the response to be returned
+        example: application/xml
+    queryParameters:
+      maxResults:
+        description: The maximum number of entries to return. This is optional.
+        type: integer
+        required: false
+        default: 25
+        example: 25
+      offset:
+        description: The 1-based index of the first result to be retrieved (for paging).
+        type: integer
+        required: false
+        default: 0
+        example: 0
+    responses:
+      200:
+        body: 
+          application/json:
+            type: Employee[]
+          application/xml:
+            type: Employee[]
+      406:
+        body: 
+          type: CustomErrorMessage
+          example: !include examples/NotAcceptableExample.raml
+  /{employee_id}:
+    get:
+      description: Retrieve an Employee with a specific Employee ID
+      displayName: Get an Employee by Employee ID
+      headers: 
+        Accept?:
+          description: Specify the media type of the response to be returned
+          example: application/xml
+      responses: 
+        200:
+          body: 
+            application/json:
+              type: Employee
+              example: !include examples/EmployeeExample.raml
+            application/xml:
+              type: Employee
+        404:
+          body: 
+            type: CustomErrorMessage
+            example: !include examples/NotFoundExample.raml
+        406:
+          body: 
+            type: CustomErrorMessage
+            example: !include examples/NotAcceptableExample.raml
+    put:
+      description: Update an Employee with a specific Employee ID
+      displayName: Update an Employee by Employee ID
+      body:
+        type: Employee
+        example: !include examples/EmployeeExample.raml 
+      responses: 
+        204:
+        500:
+          body: 
+            type: CustomErrorMessage
+            example: !include examples/InternalServerErrorExample.raml
+    delete:
+      description: Delete a specific Employee
+      displayName: Delete a Employee by Employee ID
+      responses: 
+        204:
+        500:
+          body: 
+            type: CustomErrorMessage
+            example: !include examples/InternalServerErrorExample.raml

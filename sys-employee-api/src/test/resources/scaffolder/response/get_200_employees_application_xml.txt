@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<employees>
+  <employee>
+    <id>1</id>
+    <dateOfBirth>1985-09-02T00:00:00</dateOfBirth>
+    <firstName>Chava</firstName>
+    <lastName>Puckett</lastName>
+    <gender>Female</gender>
+    <hireDate>2008-10-12T00:00:00</hireDate>
+  </employee>
+</employees>

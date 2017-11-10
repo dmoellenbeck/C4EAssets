@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans"  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+	<flow name="map-response-flow">
+		<choice doc:name="XML response?">
+			<when expression="#[flowVars.accept == 'application/xml']">
+				<dw:transform-message doc:name="map to XML">
+					<dw:input-payload mimeType="application/java" />
+					<dw:set-payload resource="classpath:transformations/map-employees-to-xml.dwl" />
+					<dw:set-property resource="classpath:properties/set-mule-encoding.dwl" propertyName="MULE_ENCODING"/>
+				</dw:transform-message>
+			</when>
+			<otherwise>
+				<dw:transform-message doc:name="map to JSON">
+					<dw:input-payload mimeType="application/java" />
+					<dw:set-payload resource="classpath:transformations/map-employees-to-json.dwl" />
+					<dw:set-property resource="classpath:properties/set-mule-encoding.dwl" propertyName="MULE_ENCODING"/>
+				</dw:transform-message>
+			</otherwise>
+		</choice>
+	</flow>
+</mule>
