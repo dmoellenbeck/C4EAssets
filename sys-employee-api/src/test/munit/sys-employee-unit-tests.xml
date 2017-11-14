@@ -69,4 +69,48 @@ http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee
         <flow-ref name="delete-employee-flow" doc:name="delete-employee-flow"/>
         <munit:assert-true message="The HTTP Status code is not correct!" condition="#[messageOutboundProperty('http.status').is(eq(204))]" doc:name="assert that - http.status eq 204" />
     </munit:test>
+    <munit:test name="get-by-id-employee-accept-json-test" description="MUnit Test">
+        <mock:when messageProcessor=".*:.*" doc:name="mock - database count">
+            <mock:with-attributes>
+                <mock:with-attribute name="doc:name" whereValue="Find employee by employee_id"/>
+            </mock:with-attributes>
+            <mock:then-return payload="#[[{'QTY':1}]]"/>
+        </mock:when>
+        <mock:when messageProcessor=".*:.*" doc:name="mock - database query">
+            <mock:with-attributes>
+                <mock:with-attribute name="doc:name" whereValue="#['GET employee by employee_id']"/>
+            </mock:with-attributes>
+            <mock:then-return payload="#[[{'no': 1, 'dob': '1985-09-02T00:00:00', 'first_name': 'Chava', 'last_name': 'Puckett', 'gender': 'F', 'hire_date': '2008-10-12T00:00:00'}]]"/>
+        </mock:when>
+        <munit:set payload="#[]" doc:name="Set 'Accept' header">
+            <munit:inbound-properties>
+                <munit:inbound-property key="accept" value="application/json"/>
+            </munit:inbound-properties>
+        </munit:set>
+        <flow-ref name="get-employees-by-id-flow" doc:name="get-by-id-employees-flow"/>
+        <object-to-string-transformer doc:name="http response to string"/>
+        <munit:assert-on-equals message="The response payload is not correct!" expectedValue="#[getResource('scaffolder/response/get_200_employees_{employee_id}_application_json.json').asString()]" actualValue="#[payload]" doc:name="assert that - payload is as expected"/>
+    </munit:test>
+    <munit:test name="get-by-id-employee-accept-xml-test" description="MUnit Test">
+        <mock:when messageProcessor=".*:.*" doc:name="mock - database count">
+            <mock:with-attributes>
+                <mock:with-attribute name="doc:name" whereValue="Find employee by employee_id"/>
+            </mock:with-attributes>
+            <mock:then-return payload="#[[{'QTY':1}]]"/>
+        </mock:when>
+        <mock:when messageProcessor=".*:.*" doc:name="mock - database query">
+            <mock:with-attributes>
+                <mock:with-attribute name="doc:name" whereValue="#['GET employee by employee_id']"/>
+            </mock:with-attributes>
+            <mock:then-return payload="#[[{'no': 1, 'dob': '1985-09-02T00:00:00', 'first_name': 'Chava', 'last_name': 'Puckett', 'gender': 'F', 'hire_date': '2008-10-12T00:00:00'}]]"/>
+        </mock:when>
+        <munit:set payload="#[]" doc:name="Set 'Accept' header">
+            <munit:inbound-properties>
+                <munit:inbound-property key="accept" value="application/xml"/>
+            </munit:inbound-properties>
+        </munit:set>
+        <flow-ref name="get-employees-by-id-flow" doc:name="get-by-id-employees-flow"/>
+        <object-to-string-transformer doc:name="http response to string"/>
+        <munit:assert-on-equals message="The response payload is not correct!" expectedValue="#[getResource('scaffolder/response/get_200_employees_{employee_id}_application_xml.txt').asString()]" actualValue="#[payload]" doc:name="assert that - payload is as expected"/>
+    </munit:test>
 </mule>
