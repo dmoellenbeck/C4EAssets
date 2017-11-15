@@ -26,8 +26,9 @@ db.name=Mulesoft
 	+ Go to the Maven Settings tab
 	+ Enter the following argument: -Druntime=studio
 5. Set the **java.library.path** VM argument for the MUnit Integration test:
-	+ Go to Run -> Run Configurations...
+	+ Right click over **sys-employee-integration-tests.xml** under **src/test/munit** folder and go to Run As -> Run Configurations...
 	+ Select **sys-employee-integration-tests.xml** under MUnit
 	+ Select **Arguments** tab
 	+ Enter the following argument, pointing to the **libs** directory at the root level of your mavenized Studio project. 
 	  Eg: `-Djava.library.path=C:\Users\aalleva\AnypointStudio\workspace\sys-employee-api\libs`
+	+ Click **Apply** and then **Run**
