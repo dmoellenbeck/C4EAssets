@@ -1,5 +1,5 @@
 %dw 1.0
-%output application/xml
+%output application/xml encoding="UTF-8"
 ---
 employees: {
 	employee: {

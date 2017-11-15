@@ -9,5 +9,5 @@ http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/htt
 http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
 	<context:property-placeholder location="config/sys-employee-${env}.properties" />
 	<http:listener-config name="HTTP_Listener_Configuration" host="${http.host}" port="${http.port}" doc:name="HTTP Listener Configuration" />
-    <db:generic-config name="Generic_Database_Configuration" url="jdbc:sqlserver://${db.server};databaseName=${db.name};user=${db.user.name};password=${db.user.password};" driverClassName="com.microsoft.sqlserver.jdbc.SQLServerDriver" doc:name="Generic Database Configuration"/>
+    <db:generic-config name="Generic_Database_Configuration" url="jdbc:sqlserver://${db.server};databaseName=${db.name};integratedSecurity=true;" driverClassName="com.microsoft.sqlserver.jdbc.SQLServerDriver" doc:name="Generic Database Configuration"/>
 </mule>
