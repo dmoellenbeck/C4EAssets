@@ -14,18 +14,20 @@ db.name=Mulesoft
 
 ## For running the proyect inside Anypoint Studio on Windows 64-bits
 
-1. Download the SQL server JDBC drivers from [Microsoft](https://www.microsoft.com/en-us/download/details.aspx?id=55539)
-2. Get the sqljdbc_auth.dll file from the auth/64 bit directory and install into your local Maven repository executing the following command:
+1. Download and unzip the example.
+2. Open Anypoint Studio and import the example as **Maven-based Mule Project from pom.xml** (File -> Import -> Anypoint Studio).
+3. Download the SQL server JDBC drivers from [Microsoft](https://www.microsoft.com/en-us/download/details.aspx?id=55539)
+4. Get the sqljdbc_auth.dll file from the auth/64 bit directory and install into your local Maven repository executing the following command:
 
 `mvn install:install-file -DgroupId=com.microsoft.sqlserver -DartifactId=sqljdbc_auth -Dversion=6.2.2.jre8 -Dclassifier=ntamd64 -Dpackaging=dll -Dfile=sqljdbc_auth.dll`
 
-3. Create a directory called **libs** at the root level of your mavenized Studio project and copy there the native library.
-4. Change the Maven Settings to activate the studio profile:
+5. Create a directory called **libs** at the root level of your mavenized Studio project and copy there the native library.
+6. Change the Maven Settings to activate the studio profile:
 	+ Go to Run -> Run Configurations...
 	+ Select your mavenized project
 	+ Go to the Maven Settings tab
 	+ Enter the following argument: -Druntime=studio
-5. Set the **java.library.path** VM argument for the MUnit Integration test:
+7. Set the **java.library.path** VM argument for the MUnit Integration test:
 	+ Right click over **sys-employee-integration-tests.xml** under **src/test/munit** folder and go to Run As -> Run Configurations...
 	+ Select **sys-employee-integration-tests.xml** under MUnit
 	+ Select **Arguments** tab
