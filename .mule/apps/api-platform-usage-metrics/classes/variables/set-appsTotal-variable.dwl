@@ -1,4 +1,4 @@
 %dw 1.0
 %output application/java
 ---
-0
+payload.total default 0 as :number

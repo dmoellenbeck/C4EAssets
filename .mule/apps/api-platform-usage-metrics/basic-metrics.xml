@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+
+
+	<flow name="getTotalAssets">
+		<dw:transform-message doc:name="Initialize variables">
+			<dw:set-variable resource="classpath:variables/init-offset-variable.dwl" variableName="offset" />
+			<dw:set-variable resource="classpath:variables/init-limit-variable.dwl" variableName="limit" />
+			<dw:set-variable resource="classpath:variables/init-assetsList-variable.dwl" variableName="assetsList" />
+		</dw:transform-message>
+		<flow-ref name="getExchangePage" doc:name="getExchangePage" />
+		<dw:transform-message doc:name="Set exchangeAssets variable">
+			<dw:set-variable resource="classpath:variables/set-exchangeAssets-variable.dwl" variableName="exchangeAssets" />
+		</dw:transform-message>
+	</flow>
+	<flow name="getExchangePage">
+		<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.exchange.uri}" method="GET" doc:name="getTotalExchangeAssets">
+			<http:request-builder>
+				<http:query-param paramName="organizationId" value="#[flowVars.rootOrgId]" />
+				<http:query-param paramName="offset" value="#[flowVars.offset]" />
+				<http:query-param paramName="limit" value="#[flowVars.limit]" />
+				<http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]" />
+			</http:request-builder>
+			<http:success-status-code-validator values="0..599" />
+		</http:request>
+		<choice doc:name="Choice">
+			<when expression="#[message.inboundProperties['http.status']=='200']">
+				<dw:transform-message doc:name="JSON to Object">
+					<dw:set-payload resource="classpath:transformations/map-json-to-object.dwl" />
+				</dw:transform-message>
+				<dw:transform-message doc:name="Append page to assetsList">
+					<dw:set-variable resource="classpath:variables/update-assetsList-variable.dwl" variableName="assetsList" />
+				</dw:transform-message>
+				<choice doc:name="fetch next page">
+					<when expression="#[payload.size() &gt; 0]">
+						<dw:transform-message doc:name="Update offset variable">
+							<dw:set-variable resource="classpath:variables/update-offset-variable.dwl" variableName="offset" />
+						</dw:transform-message>
+						<flow-ref name="getExchangePage" doc:name="getAssetsFromExchange" />
+					</when>
+					<otherwise>
+						<logger level="INFO" doc:name="Logger" />
+					</otherwise>
+				</choice>
+			</when>
+			<otherwise>
+				<logger message="Http status from getTotalAssets call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="getTotalUsers">
+		<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.accountsApi.uri}/#[flowVars.rootOrgId]/members?limit=10&amp;offset=0" method="GET"
+			doc:name="getTotalUsers">
+			<http:request-builder>
+				<http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]" />
+			</http:request-builder>
+			<http:success-status-code-validator values="0..599" />
+		</http:request>
+		<choice doc:name="Choice">
+			<when expression="#[message.inboundProperties['http.status']=='200']">
+				<dw:transform-message doc:name="Set usersTotal variable">
+					<dw:set-variable resource="classpath:variables/set-usersTotal-variable.dwl" variableName="usersTotal" />
+				</dw:transform-message>
+			</when>
+			<otherwise>
+				<logger message="Http status from getTotalUsers call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="getApplications">
+		<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars.rootOrgId]/applications?ascending=true&amp;amp;limit=10&amp;amp;offset=0"
+			method="GET" doc:name="getTotalApps">
+			<http:request-builder>
+				<http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]" />
+			</http:request-builder>
+			<http:success-status-code-validator values="0..599" />
+		</http:request>
+		<choice doc:name="Choice">
+			<when expression="#[message.inboundProperties['http.status']=='200']">
+				<dw:transform-message doc:name="Set appsTotal variable">
+					<dw:set-variable resource="classpath:variables/set-appsTotal-variable.dwl" variableName="appsTotal" />
+				</dw:transform-message>
+			</when>
+			<otherwise>
+				<logger message="Http status from getApplications call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="getTotalNumberOfAPIDefinitions">
+		<dw:transform-message doc:name="Init totalNumberOfAPIDefinitions variable">
+			<dw:set-variable resource="classpath:variables/init-totalNumberOfAPIDefinitions-variable.dwl" variableName="totalNumberOfAPIDefinitions" />
+		</dw:transform-message>
+		<foreach collection="#[flowVars.orgIdList]" doc:name="For Each">
+			<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[payload]/apis" method="GET" doc:name="getApisPerOrg">
+				<http:request-builder>
+					<http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]" />
+				</http:request-builder>
+				<http:success-status-code-validator values="0..599" />
+			</http:request>
+			<choice doc:name="Choice">
+				<when expression="#[message.inboundProperties['http.status']=='200']">
+					<dw:transform-message doc:name="Update totalNumberOfAPIDefinitions">
+						<dw:set-variable resource="classpath:variables/update-totalNumberOfAPIDefinitions-variable.dwl" variableName="totalNumberOfAPIDefinitions" />
+					</dw:transform-message>
+
+				</when>
+				<otherwise>
+					<logger message="Http status from getAPIsPerOrg call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+				</otherwise>
+			</choice>
+		</foreach>
+	</flow>
+	<flow name="getTransactions">
+		<dw:transform-message doc:name="Initialize processedCalls variable">
+            <dw:set-variable variableName="processedCalls"><![CDATA[%dw 1.0
+%output application/java
+---
+0 as :number]]></dw:set-variable>
+		</dw:transform-message>
+		<foreach collection="#[flowVars.orgIdList]" doc:name="For Each">
+            <dw:transform-message doc:name="Set currentOrgId and request message">
+                <dw:set-payload resource="classpath:transformations/map-analytics-request.dwl"/>
+                <dw:set-variable resource="classpath:variables/set-currentOrgId-variable.dwl" variableName="currentOrgId"/>
+            </dw:transform-message>
+			<logger message="${anypoint.analytics.uri}/#[flowVars.currentOrgId]/query and token is #[flowVars.anypointToken]" level="INFO" doc:name="Logger"/>
+			<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.analytics.uri}/#[flowVars['currentOrgId']]/query" method="POST"
+				doc:name="GetAPICallMetricsForCurrentSubOrg">
+				<http:request-builder>
+					<http:header headerName="Authorization" value="Bearer #[flowVars['anypointToken']]" />
+				</http:request-builder>
+				<http:success-status-code-validator values="0..599" />
+			</http:request>
+			<choice doc:name="Choice">
+				<when expression="#[message.inboundProperties['http.status']=='200']">
+                    <dw:transform-message doc:name="Update processedCalls variable">
+                        <dw:set-variable resource="classpath:variables/update-processedCalls-variable.dwl" variableName="processedCalls"/>
+                    </dw:transform-message>
+					
+				</when>
+				<otherwise>
+					<logger message="Response code is #[message.inboundProperties['http.status']] and response is #[payload]" level="ERROR" doc:name="Logger" />
+				</otherwise>
+			</choice>
+		</foreach>
+	</flow>
+</mule>
