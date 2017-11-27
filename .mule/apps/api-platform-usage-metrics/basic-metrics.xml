@@ -10,9 +10,9 @@ http://www.springframework.org/schema/beans http://www.springframework.org/schem
 http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
 
-
 	<flow name="getTotalAssets">
 		<dw:transform-message doc:name="Initialize variables">
+			<dw:input-payload mimeType="application/java" />
 			<dw:set-variable resource="classpath:variables/init-offset-variable.dwl" variableName="offset" />
 			<dw:set-variable resource="classpath:variables/init-limit-variable.dwl" variableName="limit" />
 			<dw:set-variable resource="classpath:variables/init-assetsList-variable.dwl" variableName="assetsList" />
@@ -43,8 +43,8 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 		</http:request>
 		<choice doc:name="Choice">
 			<when expression="#[message.inboundProperties['http.status']=='200']">
-				<dw:transform-message doc:name="JSON to Object">
-					<dw:set-payload resource="classpath:transformations/map-json-to-object.dwl" />
+				<dw:transform-message doc:name="Reduce Exchange Assets">
+                    <dw:set-payload resource="classpath:transformations/reduce-exchange-assets.dwl"/>
 				</dw:transform-message>
 				<dw:transform-message doc:name="Append page to assetsList">
 					<dw:set-variable resource="classpath:variables/update-assetsList-variable.dwl" variableName="assetsList" />
@@ -112,6 +112,7 @@ payload.total default 0 as :number]]></dw:set-payload>
 	</flow>
 	<flow name="getTotalNumberOfAPIDefinitions">
 		<dw:transform-message doc:name="Init totalNumberOfAPIDefinitions variable">
+			<dw:input-payload mimeType="application/java" />
 			<dw:set-variable resource="classpath:variables/init-totalNumberOfAPIDefinitions-variable.dwl" variableName="totalNumberOfAPIDefinitions" />
 		</dw:transform-message>
 		<foreach collection="#[flowVars.orgIdList]" doc:name="For Each">
@@ -136,10 +137,12 @@ payload.total default 0 as :number]]></dw:set-payload>
 	</flow>
 	<flow name="getTransactions">
 		<dw:transform-message doc:name="Initialize processedCalls variable">
+			<dw:input-payload mimeType="application/java" />
             <dw:set-variable resource="classpath:variables/init-processedCalls-variable.dwl" variableName="processedCalls"/>
 		</dw:transform-message>
 		<foreach collection="#[flowVars.orgIdList]" doc:name="For Each">
             <dw:transform-message doc:name="Set currentOrgId and request message">
+            	<dw:input-payload mimeType="application/java" />
                 <dw:set-payload resource="classpath:transformations/map-analytics-request.dwl"/>
                 <dw:set-variable resource="classpath:variables/set-currentOrgId-variable.dwl" variableName="currentOrgId"/>
             </dw:transform-message>
@@ -166,6 +169,7 @@ payload.total default 0 as :number]]></dw:set-payload>
 	</flow>
 	<flow name="getRuntimeAppsStats">
 		<dw:transform-message doc:name="Initialize variables">
+			<dw:input-payload mimeType="application/java" />
 			<dw:set-variable variableName="cloudhubUsageStatistics"><![CDATA[%dw 1.0
 %output application/java
 ---
@@ -246,4 +250,74 @@ flowVars.cloudhubUsageStatistics ++ ((flowVars.envName): started groupBy $.worke
 }]]></dw:set-payload>
         </dw:transform-message>
 	</flow>
+	<flow name="getPoliciesBeingUsed">
+        <dw:transform-message doc:name="Initialize policiesBeingUsed variable">
+        	<dw:input-payload mimeType="application/java" />
+            <dw:set-variable resource="classpath:variables/init-policiesBeingUsed-variable.dwl" variableName="policiesBeingUsed"/>
+        </dw:transform-message>
+		<foreach collection="#[flowVars.orgIdList]" doc:name="For Each">
+			<dw:transform-message doc:name="Set currentOrgId variable">
+				<dw:input-payload mimeType="application/java" />
+                <dw:set-variable resource="classpath:variables/set-currentOrgId-variable.dwl" variableName="currentOrgId"/>
+            </dw:transform-message>
+            <flow-ref name="getPolicyTemplates" doc:name="getPolicyTemplates"/>
+            <http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars.currentOrgId]/apis" method="GET" doc:name="getApisPerOrg">
+                <http:request-builder>
+                    <http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]"/>
+                </http:request-builder>
+                <http:success-status-code-validator values="0..599"/>
+            </http:request>
+            <dw:transform-message doc:name="Transform Message">
+            	<dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+---
+payload]]></dw:set-payload>
+            </dw:transform-message>
+            <choice doc:name="Choice">
+				<when expression="#[message.inboundProperties['http.status']=='200' &amp;&amp; payload.apis.size() &gt; 0]">
+                    <dw:transform-message doc:name="Map API id and version">
+                        <dw:input-payload mimeType="application/java" />
+                        <dw:set-payload resource="classpath:transformations/map-api-id-and-version.dwl"/>
+                    </dw:transform-message>
+                    <foreach doc:name="For Each">
+                        <dw:transform-message doc:name="Set apiId and apiVersion variables">
+                            <dw:input-payload mimeType="application/java" />
+                            <dw:set-variable resource="classpath:variables/set-apiId-variable.dwl" variableName="apiId"/>
+                            <dw:set-variable resource="classpath:variables/set-apiVersionId-variable.dwl" variableName="apiVersionId"/>
+                        </dw:transform-message>
+                        <flow-ref name="getPoliciesForAPIVersion" doc:name="getPoliciesForAPIVersion"/>
+                        <dw:transform-message doc:name="Update policiesBeingUsed variable">
+                            <dw:set-variable resource="classpath:variables/update-policiesBeingUsed-variable.dwl" variableName="policiesBeingUsed"/>
+                        </dw:transform-message>
+                    </foreach>
+					
+				</when>
+				<otherwise>
+					<logger message="Http status from getAPIsPerOrg call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+				</otherwise>
+			</choice>
+		</foreach>
+        <dw:transform-message doc:name="Map applied policies">
+            <dw:set-payload resource="classpath:transformations/map-applied-policies.dwl"/>
+        </dw:transform-message>
+	</flow>
+	<flow name="getPolicyTemplates">
+        <http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars.currentOrgId]/policy-templates" method="GET" doc:name="getPolicyTemplateNames">
+            <http:request-builder>
+                <http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]"/>
+            </http:request-builder>
+            <http:success-status-code-validator values="0..599"/>
+        </http:request>
+        <choice doc:name="Choice">
+            <when expression="#[message.inboundProperties['http.status']=='200']">
+                <dw:transform-message doc:name="Set policyTemplates variable">
+                    <dw:set-variable resource="classpath:variables/set-policy-templates-variable.dwl" variableName="policyTemplates"/>
+				</dw:transform-message>
+            </when>
+            <otherwise>
+                <logger message="Http status from getPolicyTemplates call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger"/>
+            </otherwise>
+        </choice>
+    </flow>
+    
 </mule>

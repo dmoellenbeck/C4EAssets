@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting"
-	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:spring="http://www.springframework.org/schema/beans"
-	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+<mule xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
 http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
 http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd
 http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
@@ -96,9 +97,11 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 			<flow-ref name="getTotalAssets" doc:name="getTotalAssets" />
 			<flow-ref name="getTotalUsers" doc:name="getTotalUsers" />
 			<flow-ref name="getApplications" doc:name="getApplications" />
-            <flow-ref name="getRuntimeAppsStats" doc:name="getRuntimeAppsStats"/>
+			<flow-ref name="getRuntimeAppsStats" doc:name="getRuntimeAppsStats" />
+			<flow-ref name="getPoliciesBeingUsed" doc:name="getPoliciesBeingUsed" />
 		</scatter-gather>
 		<dw:transform-message doc:name="Transform Message">
+			<dw:input-payload mimeType="application/java" />
 			<dw:set-payload><![CDATA[%dw 1.0
 %output application/java
 ---
@@ -108,9 +111,27 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 	exchangeAssets: payload[2],
 	totalNumberOfUsers: payload[3],
 	totalNumberOfClientApplications: payload[4],
-	runtimeUsageStatistics: payload[5]
+	runtimeUsageStatistics: payload[5],
+	policiesBeingUsed: payload[6]
 }]]></dw:set-payload>
 		</dw:transform-message>
 	</flow>
-
+	<flow name="getPoliciesForAPIVersion">
+		<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars.currentOrgId]/apis/#[flowVars.apiId]/versions/#[flowVars.apiVersionId]/policies" method="GET" doc:name="getPolicies">
+			<http:request-builder>
+                <http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]"/>
+			</http:request-builder>
+			<http:success-status-code-validator values="0..599" />
+		</http:request>
+		<choice doc:name="Choice">
+			<when expression="#[message.inboundProperties['http.status']=='200']">
+				<dw:transform-message doc:name="JSON to Object">
+					<dw:set-payload resource="classpath:transformations/map-json-to-object.dwl" />
+				</dw:transform-message>
+			</when>
+			<otherwise>
+				<logger message="Http status from getPoliciesForAPIVersion call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+			</otherwise>
+		</choice>
+	</flow>
 </mule>

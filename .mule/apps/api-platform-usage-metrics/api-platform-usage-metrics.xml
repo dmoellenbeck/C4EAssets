@@ -25,12 +25,10 @@ http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee
 		<set-variable variableName="rootOrgId" value="${rootOrgId}" doc:name="rootOrgId" />
 		<flow-ref name="getAnypointToken" doc:name="getAnypointToken" />
 		<flow-ref name="getOrganizationHierarchyAndEnvironments" doc:name="getOrganizationHierarchyAndEnvironments" />
-		<!--
-		<flow-ref name="getRuntimeAppsStats" doc:name="getRuntimeAppsStats" />
-        -->
-        <set-payload value="#[null]" doc:name="Set Payload"/>
-        <flow-ref name="getBasicMetrics" doc:name="getBasicMetrics"/>
-        <dw:transform-message doc:name="Transform Message">
+		<set-payload value="#[null]" doc:name="Set Payload" />
+		<flow-ref name="getBasicMetrics" doc:name="getBasicMetrics" />
+		<dw:transform-message doc:name="Transform Message">
+			<dw:input-payload mimeType="application/java" />
 			<dw:set-payload><![CDATA[%dw 1.0
 %output application/json
 ---
@@ -45,7 +43,8 @@ http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee
 	totalTransactionsProcessed: payload.totalTransactionsProcessed,
 	totalTransactionsProcessedInProduction: "Work in progress",
 	totalTransactionsProcessedInAcceptance: "Work in progress",
-	totalTransactionsProcessedInDevelopment: "Work in progress"
+	totalTransactionsProcessedInDevelopment: "Work in progress",
+	policiesBeingUsed: payload.policiesBeingUsed
 }]]></dw:set-payload>
 		</dw:transform-message>
 		<exception-strategy ref="exception-handler" doc:name="Reference Exception Strategy" />
