@@ -25,25 +25,24 @@ http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee
 		<set-variable variableName="rootOrgId" value="${rootOrgId}" doc:name="rootOrgId" />
 		<flow-ref name="getAnypointToken" doc:name="getAnypointToken" />
 		<flow-ref name="getOrganizationHierarchyAndEnvironments" doc:name="getOrganizationHierarchyAndEnvironments" />
+		<!--
 		<flow-ref name="getRuntimeAppsStats" doc:name="getRuntimeAppsStats" />
-        <flow-ref name="getTotalNumberOfAPIDefinitions" doc:name="totalNumberOfAPIDefinitions"/>
-		<flow-ref name="getTotalUsers" doc:name="getTotalUsers" />
-		<flow-ref name="getApplications" doc:name="getApplications" />
-		<flow-ref name="getTotalAssets" doc:name="getTotalAssets" />
-        <flow-ref name="getTransactions" doc:name="getTransactions"/>
-		<dw:transform-message doc:name="Transform Message">
+        -->
+        <set-payload value="#[null]" doc:name="Set Payload"/>
+        <flow-ref name="getBasicMetrics" doc:name="getBasicMetrics"/>
+        <dw:transform-message doc:name="Transform Message">
 			<dw:set-payload><![CDATA[%dw 1.0
 %output application/json
 ---
 {
 	totalNumberOfBusinessOrgs: sizeOf flowVars.orgIdList,
-	totalNumberOfAPIDefinitions: flowVars.totalNumberOfAPIDefinitions,
-	exchangeAssets: flowVars.exchangeAssets,
-	totalNumberOfUsers: flowVars.usersTotal,
-	totalNumberOfClientApplications: flowVars.appsTotal,
-	onPremRuntimeUsageStatistics: flowVars.onPremRuntimeUsageStatistics,
-	cloudhubUsageStatistics: flowVars.cloudhubUsageStatistics,
-	totalTransactionsProcessed: flowVars.processedCalls,
+	totalNumberOfAPIDefinitions: payload.totalNumberOfAPIDefinitions,
+	exchangeAssets: payload.exchangeAssets,
+	totalNumberOfUsers: payload.totalNumberOfUsers,
+	totalNumberOfClientApplications: payload.totalNumberOfClientApplications,
+	onPremRuntimeUsageStatistics: payload.runtimeUsageStatistics.onPremRuntimeUsageStatistics,
+	cloudhubUsageStatistics: payload.runtimeUsageStatistics.cloudhubUsageStatistics,
+	totalTransactionsProcessed: payload.totalTransactionsProcessed,
 	totalTransactionsProcessedInProduction: "Work in progress",
 	totalTransactionsProcessedInAcceptance: "Work in progress",
 	totalTransactionsProcessedInDevelopment: "Work in progress"
@@ -51,77 +50,4 @@ http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee
 		</dw:transform-message>
 		<exception-strategy ref="exception-handler" doc:name="Reference Exception Strategy" />
 	</flow>
-	<sub-flow name="getRuntimeAppsStats">
-		<dw:transform-message doc:name="Initialize variables">
-			<dw:set-variable variableName="cloudhubUsageStatistics"><![CDATA[%dw 1.0
-%output application/java
----
-{}]]></dw:set-variable>
-			<dw:set-variable variableName="onPremRuntimeUsageStatistics"><![CDATA[%dw 1.0
-%output application/java
----
-{}]]></dw:set-variable>
-		</dw:transform-message>
-		<foreach collection="#[flowVars.environments]" doc:name="For Each">
-			<set-variable variableName="envId" value="#[payload.id]" doc:name="set envId" />
-			<set-variable variableName="envName" value="#[payload.name]" doc:name="set envName" />
-			<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.hybrid.uri}" method="GET" doc:name="getHybridApps">
-				<http:request-builder>
-					<http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]" />
-					<http:header headerName="X-ANYPNT-ORG-ID" value="#[flowVars.rootOrgId]" />
-					<http:header headerName="X-ANYPNT-ENV-ID" value="#[flowVars.envId]" />
-				</http:request-builder>
-				<http:success-status-code-validator values="0..599" />
-			</http:request>
-			<dw:transform-message doc:name="JSON to Object">
-				<dw:set-payload resource="classpath:transformations/map-json-to-object.dwl" />
-			</dw:transform-message>
-			<choice doc:name="getHybridApps?">
-				<when expression="#[message.inboundProperties.'http.status' == 200]">
-					<dw:transform-message doc:name="Transform Message">
-						<dw:set-variable variableName="onPremRuntimeUsageStatistics"><![CDATA[%dw 1.0
-%output application/java
-%var started = payload.data filter $.lastReportedStatus == "STARTED"
----
-flowVars.onPremRuntimeUsageStatistics
-++
-{
-	(flowVars.envName): sizeOf started
-}]]></dw:set-variable>
-					</dw:transform-message>
-				</when>
-				<otherwise>
-					<logger message="Http status from getHybridApps call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
-				</otherwise>
-			</choice>
-			<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.cloudhub.uri}" method="GET" doc:name="getCloudhubApps">
-				<http:request-builder>
-					<http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]" />
-					<http:header headerName="X-ANYPNT-ENV-ID" value="#[flowVars.envId]" />
-					<http:header headerName="Content-Type" value="application/json" />
-				</http:request-builder>
-				<http:success-status-code-validator values="0..599" />
-			</http:request>
-			<dw:transform-message doc:name="JSON to Object">
-				<dw:set-payload resource="classpath:transformations/map-json-to-object.dwl" />
-			</dw:transform-message>
-			<choice doc:name="getCloudhubApps?">
-				<when expression="#[message.inboundProperties.'http.status' == 200]">
-					<dw:transform-message doc:name="Transform Message">
-						<dw:set-variable variableName="cloudhubUsageStatistics"><![CDATA[%dw 1.0
-%output application/java
-%var started = payload filter $.status == "STARTED"
----
-flowVars.cloudhubUsageStatistics ++ ((flowVars.envName): started groupBy $.workerType mapObject ( (v, k) ->
-  (k): sum v.workers
-) ++ {applicationCount: sizeOf started})
-]]></dw:set-variable>
-					</dw:transform-message>
-				</when>
-				<otherwise>
-					<logger message="Http status from getCloudhubApps call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
-				</otherwise>
-			</choice>
-		</foreach>
-	</sub-flow>
 </mule>

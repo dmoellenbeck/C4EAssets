@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting"
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting"
 	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:spring="http://www.springframework.org/schema/beans"
-	 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
 http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
 http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd
 http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
-http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
 
 	<flow name="getAnypointToken">
 		<set-payload value="username=${anypointUsername}&amp;password=${anypointPassword}" doc:name="setPayload" />
@@ -23,9 +24,9 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 					<dw:set-payload resource="classpath:transformations/map-json-to-object.dwl" />
 				</dw:transform-message>
 				<logger message="response received from AnypointPlatform for getAnypointToken call #[payload]" level="INFO" doc:name="Logger" />
-                <dw:transform-message doc:name="Set anypointToken variable">
-                    <dw:set-variable resource="classpath:variables/set-anypointToken-variable.dwl" variableName="anypointToken"/>
-                </dw:transform-message>
+				<dw:transform-message doc:name="Set anypointToken variable">
+					<dw:set-variable resource="classpath:variables/set-anypointToken-variable.dwl" variableName="anypointToken" />
+				</dw:transform-message>
 			</when>
 			<otherwise>
 				<logger level="ERROR" doc:name="Logger" message="logger after getAnypointToken call" />
@@ -88,5 +89,28 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			</otherwise>
 		</choice>
 	</flow>
-	
+	<flow name="getBasicMetrics">
+		<scatter-gather doc:name="Scatter-Gather">
+			<flow-ref name="getTotalNumberOfAPIDefinitions" doc:name="getTotalNumberOfAPIDefinitions" />
+			<flow-ref name="getTransactions" doc:name="getTransactions" />
+			<flow-ref name="getTotalAssets" doc:name="getTotalAssets" />
+			<flow-ref name="getTotalUsers" doc:name="getTotalUsers" />
+			<flow-ref name="getApplications" doc:name="getApplications" />
+            <flow-ref name="getRuntimeAppsStats" doc:name="getRuntimeAppsStats"/>
+		</scatter-gather>
+		<dw:transform-message doc:name="Transform Message">
+			<dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+---
+{
+	totalNumberOfAPIDefinitions: payload[0],
+	totalTransactionsProcessed: payload[1],
+	exchangeAssets: payload[2],
+	totalNumberOfUsers: payload[3],
+	totalNumberOfClientApplications: payload[4],
+	runtimeUsageStatistics: payload[5]
+}]]></dw:set-payload>
+		</dw:transform-message>
+	</flow>
+
 </mule>
