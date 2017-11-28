@@ -112,26 +112,11 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 	totalNumberOfUsers: payload[3],
 	totalNumberOfClientApplications: payload[4],
 	runtimeUsageStatistics: payload[5],
-	policiesBeingUsed: payload[6]
+	policiesBeingUsed: payload[6].policiesBeingUsed,
+	policyApiAssociationList: payload[6].policyApiAssociationList,
+	totalNumberOfUnsecureAPIs: payload[6].totalNumberOfUnsecureAPIs,
+	totalNumberOfUndocumentedAPIs: payload[6].totalNumberOfUndocumentedAPIs
 }]]></dw:set-payload>
 		</dw:transform-message>
-	</flow>
-	<flow name="getPoliciesForAPIVersion">
-		<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars.currentOrgId]/apis/#[flowVars.apiId]/versions/#[flowVars.apiVersionId]/policies" method="GET" doc:name="getPolicies">
-			<http:request-builder>
-                <http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]"/>
-			</http:request-builder>
-			<http:success-status-code-validator values="0..599" />
-		</http:request>
-		<choice doc:name="Choice">
-			<when expression="#[message.inboundProperties['http.status']=='200']">
-				<dw:transform-message doc:name="JSON to Object">
-					<dw:set-payload resource="classpath:transformations/map-json-to-object.dwl" />
-				</dw:transform-message>
-			</when>
-			<otherwise>
-				<logger message="Http status from getPoliciesForAPIVersion call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
-			</otherwise>
-		</choice>
 	</flow>
 </mule>

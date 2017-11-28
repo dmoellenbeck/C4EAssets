@@ -44,7 +44,10 @@ http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee
 	totalTransactionsProcessedInProduction: "Work in progress",
 	totalTransactionsProcessedInAcceptance: "Work in progress",
 	totalTransactionsProcessedInDevelopment: "Work in progress",
-	policiesBeingUsed: payload.policiesBeingUsed
+	policiesBeingUsed: payload.policiesBeingUsed,
+	policyApiAssociationList: payload.policyApiAssociationList,
+	totalNumberOfUnsecureAPIs: payload.totalNumberOfUnsecureAPIs,
+	totalNumberOfUndocumentedAPIs: payload.totalNumberOfUndocumentedAPIs
 }]]></dw:set-payload>
 		</dw:transform-message>
 		<exception-strategy ref="exception-handler" doc:name="Reference Exception Strategy" />
