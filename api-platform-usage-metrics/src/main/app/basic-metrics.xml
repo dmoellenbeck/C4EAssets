@@ -147,7 +147,7 @@ payload.total default 0 as :number]]></dw:set-payload>
 				<dw:set-variable resource="classpath:variables/set-currentOrgId-variable.dwl" variableName="currentOrgId" />
 			</dw:transform-message>
 			<logger message="${anypoint.analytics.uri}/#[flowVars.currentOrgId]/query and token is #[flowVars.anypointToken]" level="INFO" doc:name="Logger" />
-			<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.analytics.uri}/#[flowVars['currentOrgId']]/query" method="POST"
+			<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.analytics.uri}/#[flowVars.currentOrgId]/query" method="POST"
 				doc:name="GetAPICallMetricsForCurrentSubOrg">
 				<http:request-builder>
 					<http:header headerName="Authorization" value="Bearer #[flowVars['anypointToken']]" />
@@ -255,8 +255,8 @@ flowVars.cloudhubUsageStatistics ++ ((flowVars.envName): started groupBy $.worke
 			<dw:input-payload mimeType="application/java" />
 			<dw:set-variable resource="classpath:variables/init-policiesBeingUsed-variable.dwl" variableName="policiesBeingUsed" />
 			<dw:set-variable resource="classpath:variables/set-policyApiList-variable.dwl" variableName="policyApiList" />
-            <dw:set-variable resource="classpath:variables/set-totalNumberOfUnsecureAPIs-variable.dwl" variableName="totalNumberOfUnsecureAPIs"/>
-            <dw:set-variable resource="classpath:variables/init-totalNumberOfUndocumentedAPIs-variable.dwl" variableName="totalNumberOfUndocumentedAPIs"/>
+			<dw:set-variable resource="classpath:variables/set-totalNumberOfUnsecureAPIs-variable.dwl" variableName="totalNumberOfUnsecureAPIs" />
+			<dw:set-variable resource="classpath:variables/init-totalNumberOfUndocumentedAPIs-variable.dwl" variableName="totalNumberOfUndocumentedAPIs" />
 		</dw:transform-message>
 		<foreach collection="#[flowVars.orgIdList]" doc:name="For Each">
 			<dw:transform-message doc:name="Set currentOrgId variable">
@@ -278,7 +278,7 @@ flowVars.cloudhubUsageStatistics ++ ((flowVars.envName): started groupBy $.worke
 					<dw:transform-message doc:name="Map API id and version">
 						<dw:input-payload mimeType="application/java" />
 						<dw:set-payload resource="classpath:transformations/map-api-id-and-version.dwl" />
-                        <dw:set-variable resource="classpath:variables/update-totalNumberOfUndocumentedAPIs-variable.dwl" variableName="totalNumberOfUndocumentedAPIs"/>
+						<dw:set-variable resource="classpath:variables/update-totalNumberOfUndocumentedAPIs-variable.dwl" variableName="totalNumberOfUndocumentedAPIs" />
 					</dw:transform-message>
 					<foreach doc:name="For Each">
 						<dw:transform-message doc:name="Set apiId and apiVersion variables">
@@ -288,7 +288,6 @@ flowVars.cloudhubUsageStatistics ++ ((flowVars.envName): started groupBy $.worke
 						</dw:transform-message>
 						<flow-ref name="getPoliciesForAPIVersion" doc:name="getPoliciesForAPIVersion" />
 					</foreach>
-
 				</when>
 				<otherwise>
 					<logger message="Http status from getAPIsPerOrg call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
@@ -330,24 +329,285 @@ flowVars.cloudhubUsageStatistics ++ ((flowVars.envName): started groupBy $.worke
 			<dw:set-payload resource="classpath:transformations/map-json-to-object.dwl" />
 		</dw:transform-message>
 		<choice doc:name="http status eq 200">
-            <when expression="#[message.inboundProperties['http.status']=='200']">
-                <choice doc:name="has policies">
-                    <when expression="#[payload.size() &gt; 0]">
-                        <dw:transform-message doc:name="Update variables">
-                            <dw:set-variable resource="classpath:variables/update-policiesBeingUsed-variable.dwl" variableName="policiesBeingUsed"/>
-                            <dw:set-variable resource="classpath:variables/update-policyApiList-variable.dwl" variableName="policyApiList"/>
-                        </dw:transform-message>
-                    </when>
-                    <otherwise>
-                        <dw:transform-message doc:name="Update totalNumberOfUnsecureAPIs variable">
-                            <dw:set-variable resource="classpath:variables/update-totalNumberOfUnsecureAPIs-variable.dwl" variableName="totalNumberOfUnsecureAPIs"/>
-                        </dw:transform-message>
-                    </otherwise>
-                </choice>
-            </when>
+			<when expression="#[message.inboundProperties['http.status']=='200']">
+				<choice doc:name="has policies">
+					<when expression="#[payload.size() &gt; 0]">
+						<dw:transform-message doc:name="Update variables">
+							<dw:set-variable resource="classpath:variables/update-policiesBeingUsed-variable.dwl" variableName="policiesBeingUsed" />
+							<dw:set-variable resource="classpath:variables/update-policyApiList-variable.dwl" variableName="policyApiList" />
+						</dw:transform-message>
+					</when>
+					<otherwise>
+						<dw:transform-message doc:name="Update totalNumberOfUnsecureAPIs variable">
+							<dw:set-variable resource="classpath:variables/update-totalNumberOfUnsecureAPIs-variable.dwl" variableName="totalNumberOfUnsecureAPIs" />
+						</dw:transform-message>
+					</otherwise>
+				</choice>
+			</when>
 			<otherwise>
 				<logger message="Http status from getPoliciesForAPIVersion call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
 			</otherwise>
 		</choice>
+	</flow>
+	<flow name="getActiveAPIs">
+		<dw:transform-message doc:name="Initialize app names variables">
+			<dw:set-variable resource="classpath:variables/init-cloudhubAppNames-variables.dwl" variableName="cloudhubAppNames" />
+			<dw:set-variable resource="classpath:variables/init-hybridAppNames-variable.dwl" variableName="hybridAppNames" />
+		</dw:transform-message>
+		<foreach collection="#[flowVars.environments]" doc:name="For Each">
+			<set-variable variableName="envId" value="#[payload.id]" doc:name="set envId" />
+			<set-variable variableName="envName" value="#[payload.name]" doc:name="set envName" />
+			<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.hybrid.uri}" method="GET" doc:name="getHybridApps">
+				<http:request-builder>
+					<http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]" />
+					<http:header headerName="X-ANYPNT-ORG-ID" value="#[flowVars.rootOrgId]" />
+					<http:header headerName="X-ANYPNT-ENV-ID" value="#[flowVars.envId]" />
+				</http:request-builder>
+				<http:success-status-code-validator values="0..599" />
+			</http:request>
+			<dw:transform-message doc:name="JSON to Object">
+				<dw:set-payload resource="classpath:transformations/map-json-to-object.dwl" />
+			</dw:transform-message>
+			<choice doc:name="getHybridApps?">
+				<when expression="#[message.inboundProperties.'http.status' == 200]">
+					<dw:transform-message doc:name="Map Hybrid Apps Names">
+						<dw:set-variable variableName="hybridAppNames"><![CDATA[%dw 1.0
+%output application/java
+%var appList = payload.data filter $.lastReportedStatus == "STARTED"
+---
+flowVars.hybridAppNames ++
+{
+  (flowVars.envId): appList map $.name
+}
+]]></dw:set-variable>
+					</dw:transform-message>
+				</when>
+				<otherwise>
+					<logger message="Http status from getHybridApps call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+				</otherwise>
+			</choice>
+			<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.cloudhub.uri}" method="GET" doc:name="getCloudhubApps">
+				<http:request-builder>
+					<http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]" />
+					<http:header headerName="X-ANYPNT-ENV-ID" value="#[flowVars.envId]" />
+					<http:header headerName="Content-Type" value="application/json" />
+				</http:request-builder>
+				<http:success-status-code-validator values="0..599" />
+			</http:request>
+			<dw:transform-message doc:name="JSON to Object">
+				<dw:set-payload resource="classpath:transformations/map-json-to-object.dwl" />
+			</dw:transform-message>
+			<choice doc:name="getCloudhubApps?">
+				<when expression="#[message.inboundProperties.'http.status' == 200]">
+					<dw:transform-message doc:name="Map CH Apps Names">
+						<dw:set-variable variableName="cloudhubAppNames"><![CDATA[%dw 1.0
+%output application/java
+%var appList = payload filter $.status == "STARTED"
+---
+flowVars.cloudhubAppNames ++
+{
+  (flowVars.envId): appList map $.domain
+}]]></dw:set-variable>
+					</dw:transform-message>
+				</when>
+				<otherwise>
+					<logger message="Http status from getCloudhubApps call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+				</otherwise>
+			</choice>
+		</foreach>
+		<foreach collection="#[flowVars.orgIdList]" doc:name="For Each">
+			<dw:transform-message doc:name="Set currentOrgId and initialize activeAPIsCounter variable">
+				<dw:input-payload mimeType="application/java" />
+				<dw:set-variable resource="classpath:variables/set-currentOrgId-variable.dwl" variableName="currentOrgId" />
+				<dw:set-variable variableName="activeAPIsCounter"><![CDATA[%dw 1.0
+%output application/java
+---
+{(flowVars.environments map {
+  ($.id): {
+  	on-prem: 0,
+    cloudhub: 0
+  }
+})}]]></dw:set-variable>
+			</dw:transform-message>
+			<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars.currentOrgId]/apis" method="GET" doc:name="getApisPerOrg">
+				<http:request-builder>
+					<http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]" />
+				</http:request-builder>
+				<http:success-status-code-validator values="0..599" />
+			</http:request>
+			<dw:transform-message doc:name="JSON to Object">
+				<dw:set-payload resource="classpath:transformations/map-json-to-object.dwl" />
+			</dw:transform-message>
+			<choice doc:name="Choice">
+				<when expression="#[message.inboundProperties.'http.status' == 200 &amp;&amp; payload.apis.size() &gt; 0]">
+					<dw:transform-message doc:name="Map API id and version">
+						<dw:input-payload mimeType="application/java" />
+						<dw:set-payload resource="classpath:transformations/map-api-id-and-version.dwl" />
+					</dw:transform-message>
+					<foreach doc:name="For Each">
+						<dw:transform-message doc:name="Set apiId and apiVersion variables">
+							<dw:input-payload mimeType="application/java" />
+							<dw:set-variable resource="classpath:variables/set-apiId-variable.dwl" variableName="apiId" />
+							<dw:set-variable resource="classpath:variables/set-apiVersionId-variable.dwl" variableName="apiVersionId" />
+						</dw:transform-message>
+						<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars.currentOrgId]/apis/#[flowVars.apiId]/versions/#[flowVars.apiVersionId]"
+							method="GET" doc:name="getApiVersions">
+							<http:request-builder>
+								<http:header headerName="Authorization" value="Bearer #[flowVars['anypointToken']]" />
+							</http:request-builder>
+							<http:success-status-code-validator values="0..599" />
+						</http:request>
+						<dw:transform-message doc:name="JSON to Object">
+							<dw:set-payload resource="classpath:transformations/map-json-to-object.dwl" />
+						</dw:transform-message>
+						<choice doc:name="Choice">
+							<when expression="#[message.inboundProperties.'http.status' == 200 &amp;&amp; payload.deployment != null]">
+								<dw:transform-message doc:name="Transform Message">
+									<dw:input-payload mimeType="application/java" />
+									<dw:set-variable variableName="activeAPIsCounter"><![CDATA[%dw 1.0
+%output application/java
+%var environment = payload.deployment.environmentId
+%var applicationName = payload.deployment.applicationName
+---
+flowVars.activeAPIsCounter mapObject ((v,k) -> {
+ (k):v
+} when (('$k') != environment) otherwise (k): {
+  cloudhub : (v.cloudhub + 1) when flowVars.cloudhubAppNames.'$environment' contains applicationName otherwise v.cloudhub,
+  on-prem : (v.on-prem + 1) when flowVars.hybridAppNames.'$environment' contains applicationName otherwise v.on-prem
+})]]></dw:set-variable>
+								</dw:transform-message>
+							</when>
+							<otherwise>
+								<logger message="Http status from getAPIVersions call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+							</otherwise>
+						</choice>
+					</foreach>
+				</when>
+				<otherwise>
+					<logger message="Http status from getAPIsPerOrg call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+				</otherwise>
+			</choice>
+		</foreach>
+		<dw:transform-message doc:name="Map activeAPIs">
+			<dw:input-payload mimeType="application/java" />
+			<dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+%var mapIterative = ((argument) ->
+  argument match {
+    argument when (argument is :array) -> (argument map mapIterative($)) reduce ($ ++ $$),
+    argument when (argument is :object) -> argument mapObject (mapIterative($)),
+    default -> argument
+  }
+)
+%var environments = mapIterative(flowVars.environments map {
+  ($.id):$.name
+})
+---
+flowVars.activeAPIsCounter mapObject (
+  (environments[$$]): ($ ++ { total: $.on-prem + $.cloudhub}) 
+)]]></dw:set-payload>
+		</dw:transform-message>
+	</flow>
+	<flow name="getBusinessOrgs">
+		<dw:transform-message doc:name="Transform Message">
+			<dw:set-variable variableName="businessOrgs"><![CDATA[%dw 1.0
+%output application/java
+---
+[]]]></dw:set-variable>
+		</dw:transform-message>
+		<foreach collection="#[flowVars.orgIdList]" doc:name="For Each">
+			<dw:transform-message doc:name="Transform Message">
+				<dw:input-payload mimeType="application/java" />
+				<dw:set-payload resource="classpath:transformations/map-analytics-request.dwl" />
+				<dw:set-variable variableName="businessOrgId"><![CDATA[%dw 1.0
+%output application/java
+---
+payload]]></dw:set-variable>
+				<dw:set-variable variableName="businessOrgName"><![CDATA[%dw 1.0
+%output application/java
+---
+flowVars.orgIdNameMap[flowVars.businessOrgId]]]></dw:set-variable>
+			</dw:transform-message>
+			<logger message="${anypoint.analytics.uri}/#[flowVars.currentOrgId]/query and token is #[flowVars.anypointToken]" level="INFO" doc:name="Logger" />
+			<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.analytics.uri}/#[flowVars.businessOrgId]/query" method="POST"
+				doc:name="GetAPICallMetricsForCurrentSubOrg">
+				<http:request-builder>
+					<http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]" />
+				</http:request-builder>
+				<http:success-status-code-validator values="0..599" />
+			</http:request>
+			<choice doc:name="Choice">
+				<when expression="#[message.inboundProperties['http.status']=='200']">
+					<dw:transform-message doc:name="Transform Message">
+						<dw:set-variable variableName="businessOrgs"><![CDATA[%dw 1.0
+%output application/java
+---
+flowVars.businessOrgs +
+{
+	businessOrgName: flowVars.businessOrgId,
+	businessOrgId: flowVars.businessOrgName,
+	processedCalls: payload.response[0].request_disposition[0].PROCESSED.count default 0,
+  	blockedCalls: payload.response[0].request_disposition[1].BLOCKED.count default 0
+}]]></dw:set-variable>
+					</dw:transform-message>
+					<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars.currentOrgId]/apis" method="GET" doc:name="getApisPerOrg">
+						<http:request-builder>
+							<http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]" />
+						</http:request-builder>
+						<http:success-status-code-validator values="0..599" />
+					</http:request>
+					<dw:transform-message doc:name="JSON to Object">
+						<dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+---
+payload]]></dw:set-payload>
+					</dw:transform-message>
+					<choice doc:name="Choice">
+						<when expression="#[message.inboundProperties.'http.status' == 200 &amp;&amp; payload.apis.size() &gt; 0]">
+							<dw:transform-message doc:name="Transform Message">
+								<dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+---
+flatten payload.apis.versions map {
+  orgId: $.organizationId,
+  apiId: $.apiId,
+  apiVersionId: $.id,
+  portalId: $.portalId
+}]]></dw:set-payload>
+							</dw:transform-message>
+							<foreach doc:name="For Each">
+								<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars.currentOrgId]/apis/#[flowVars.apiId]/versions/#[flowVars.apiVersionId]"
+									method="GET" doc:name="getApiVersions">
+									<http:request-builder>
+										<http:header headerName="Authorization" value="Bearer #[flowVars['anypointToken']]" />
+									</http:request-builder>
+									<http:success-status-code-validator values="0..599" />
+								</http:request>
+                                <choice doc:name="Choice">
+                                    <when expression="#[message.inboundProperties.'http.status' == 200]">
+                                        <logger level="DEBUG" doc:name="Logger"/>
+                                    </when>
+                                    <otherwise>
+                                        <logger level="DEBUG" doc:name="Logger"/>
+                                    </otherwise>
+                                </choice>
+							</foreach>
+						</when>
+						<otherwise>
+							<logger level="DEBUG" doc:name="Logger" />
+						</otherwise>
+					</choice>
+				</when>
+				<otherwise>
+					<logger message="Response code is #[message.inboundProperties['http.status']] and response is #[payload]" level="ERROR" doc:name="Logger" />
+				</otherwise>
+			</choice>
+		</foreach>
+		<dw:transform-message doc:name="Transform Message">
+			<dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+---
+flowVars.businessOrgs]]></dw:set-payload>
+		</dw:transform-message>
 	</flow>
 </mule>

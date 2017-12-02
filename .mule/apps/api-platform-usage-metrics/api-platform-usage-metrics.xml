@@ -35,6 +35,7 @@ http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee
 {
 	totalNumberOfBusinessOrgs: sizeOf flowVars.orgIdList,
 	totalNumberOfAPIDefinitions: payload.totalNumberOfAPIDefinitions,
+	activeAPIs: payload.activeAPIs,
 	exchangeAssets: payload.exchangeAssets,
 	totalNumberOfUsers: payload.totalNumberOfUsers,
 	totalNumberOfClientApplications: payload.totalNumberOfClientApplications,
@@ -47,7 +48,8 @@ http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee
 	policiesBeingUsed: payload.policiesBeingUsed,
 	policyApiAssociationList: payload.policyApiAssociationList,
 	totalNumberOfUnsecureAPIs: payload.totalNumberOfUnsecureAPIs,
-	totalNumberOfUndocumentedAPIs: payload.totalNumberOfUndocumentedAPIs
+	totalNumberOfUndocumentedAPIs: payload.totalNumberOfUndocumentedAPIs,
+	businessOrgs: payload.businessOrgs
 }]]></dw:set-payload>
 		</dw:transform-message>
 		<exception-strategy ref="exception-handler" doc:name="Reference Exception Strategy" />

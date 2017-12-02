@@ -99,6 +99,8 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 			<flow-ref name="getApplications" doc:name="getApplications" />
 			<flow-ref name="getRuntimeAppsStats" doc:name="getRuntimeAppsStats" />
 			<flow-ref name="getPoliciesBeingUsed" doc:name="getPoliciesBeingUsed" />
+            <flow-ref name="getActiveAPIs" doc:name="getActiveAPIs"/>
+            <flow-ref name="getBusinessOrgs" doc:name="getBusinessOrgs"/>
 		</scatter-gather>
 		<dw:transform-message doc:name="Transform Message">
 			<dw:input-payload mimeType="application/java" />
@@ -115,7 +117,9 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 	policiesBeingUsed: payload[6].policiesBeingUsed,
 	policyApiAssociationList: payload[6].policyApiAssociationList,
 	totalNumberOfUnsecureAPIs: payload[6].totalNumberOfUnsecureAPIs,
-	totalNumberOfUndocumentedAPIs: payload[6].totalNumberOfUndocumentedAPIs
+	totalNumberOfUndocumentedAPIs: payload[6].totalNumberOfUndocumentedAPIs,
+	activeAPIs: payload[7],
+	businessOrgs: payload[8]
 }]]></dw:set-payload>
 		</dw:transform-message>
 	</flow>
