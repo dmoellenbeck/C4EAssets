@@ -539,20 +539,18 @@ flowVars.orgIdNameMap[flowVars.businessOrgId]]]></dw:set-variable>
 			<choice doc:name="Choice">
 				<when expression="#[message.inboundProperties['http.status']=='200']">
 					<dw:transform-message doc:name="Transform Message">
-						<dw:set-variable variableName="businessOrgs"><![CDATA[%dw 1.0
+                        <dw:set-variable variableName="processedCalls"><![CDATA[%dw 1.0
 %output application/java
 ---
-flowVars.businessOrgs +
-{
-	businessOrgName: flowVars.businessOrgId,
-	businessOrgId: flowVars.businessOrgName,
-	processedCalls: payload.response[0].request_disposition[0].PROCESSED.count default 0,
-  	blockedCalls: payload.response[0].request_disposition[1].BLOCKED.count default 0
-}]]></dw:set-variable>
+payload.response[0].request_disposition[0].PROCESSED.count default 0]]></dw:set-variable>
+                        <dw:set-variable variableName="blockedCalls"><![CDATA[%dw 1.0
+%output application/java
+---
+payload.response[0].request_disposition[1].BLOCKED.count default 0]]></dw:set-variable>
 					</dw:transform-message>
-					<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars.currentOrgId]/apis" method="GET" doc:name="getApisPerOrg">
+					<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars.businessOrgId]/apis" method="GET" doc:name="getApisPerOrg">
 						<http:request-builder>
-							<http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]" />
+                            <http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]"/>
 						</http:request-builder>
 						<http:success-status-code-validator values="0..599" />
 					</http:request>
@@ -565,33 +563,118 @@ payload]]></dw:set-payload>
 					<choice doc:name="Choice">
 						<when expression="#[message.inboundProperties.'http.status' == 200 &amp;&amp; payload.apis.size() &gt; 0]">
 							<dw:transform-message doc:name="Transform Message">
-								<dw:set-payload><![CDATA[%dw 1.0
+                                <dw:set-payload><![CDATA[%dw 1.0
 %output application/java
 ---
 flatten payload.apis.versions map {
   orgId: $.organizationId,
   apiId: $.apiId,
   apiVersionId: $.id,
-  portalId: $.portalId
+  versionName: $.name,
+  portalId: $.portalId,
+  portalIsPublic: $.portal.isPublic default false
 }]]></dw:set-payload>
+                                <dw:set-variable variableName="apiNames"><![CDATA[%dw 1.0
+%output application/java
+%var mapIterative = ((argument) ->
+  argument match {
+    argument when (argument is :array) -> (argument map mapIterative($)) reduce ($ ++ $$),
+    argument when (argument is :object) -> argument mapObject (mapIterative($)),
+    default -> argument
+  }
+)
+---
+mapIterative(payload.apis map {
+  ($.id): $.name
+})]]></dw:set-variable>
+                                <dw:set-variable variableName="apiVersions"><![CDATA[%dw 1.0
+%output application/java
+---
+[]]]></dw:set-variable>
+                                <dw:set-variable variableName="apiCreationDates"><![CDATA[%dw 1.0
+%output application/java
+%var mapIterative = ((argument) ->
+  argument match {
+    argument when (argument is :array) -> (argument map mapIterative($)) reduce ($ ++ $$),
+    argument when (argument is :object) -> argument mapObject (mapIterative($)),
+    default -> argument
+  }
+)
+---
+mapIterative(payload.apis map {
+  ($.id): $.audit.created.date
+})]]></dw:set-variable>
 							</dw:transform-message>
 							<foreach doc:name="For Each">
-								<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars.currentOrgId]/apis/#[flowVars.apiId]/versions/#[flowVars.apiVersionId]"
+                                <dw:transform-message doc:name="Transform Message">
+                                    <dw:set-variable variableName="apiId"><![CDATA[%dw 1.0
+%output application/java
+---
+payload.apiId]]></dw:set-variable>
+                                    <dw:set-variable variableName="apiVersionId"><![CDATA[%dw 1.0
+%output application/java
+---
+payload.apiVersionId]]></dw:set-variable>
+                                    <dw:set-variable variableName="versionName"><![CDATA[%dw 1.0
+%output application/java
+---
+payload.versionName]]></dw:set-variable>
+                                    <dw:set-variable variableName="portalIsPublic"><![CDATA[%dw 1.0
+%output application/java
+---
+payload.portalIsPublic]]></dw:set-variable>
+                                </dw:transform-message>
+								<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars.businessOrgId]/apis/#[flowVars.apiId]/versions/#[flowVars.apiVersionId]"
 									method="GET" doc:name="getApiVersions">
 									<http:request-builder>
-										<http:header headerName="Authorization" value="Bearer #[flowVars['anypointToken']]" />
+                                        <http:header headerName="Authorization" value="Bearer #[flowVars['anypointToken']]"/>
 									</http:request-builder>
 									<http:success-status-code-validator values="0..599" />
 								</http:request>
                                 <choice doc:name="Choice">
                                     <when expression="#[message.inboundProperties.'http.status' == 200]">
-                                        <logger level="DEBUG" doc:name="Logger"/>
+                                        <dw:transform-message doc:name="Transform Message">
+                                            <dw:set-variable variableName="apiVersions"><![CDATA[%dw 1.0
+%output application/java
+%var apiId = flowVars.apiId as :string
+---
+flowVars.apiVersions +
+(flowVars.apiNames.'$apiId' ++ "-" ++ flowVars.versionName): {
+	isCloudHub: payload.endpoint.isCloudHub default false,
+	containsPortal: true when payload.portalId != null otherwise false,
+	orgId: payload.organizationId,
+	apiName: flowVars.apiNames.'$apiId',
+	versionName: payload.name,
+	apiVersionDescription: payload.description,
+	apiId: payload.apiId,
+	apiVersionId: payload.id,
+	portalId: payload.portalId,
+	apiVersionProxyEndpointId: payload.endpoint.proxyUri,
+	apiVersionImplementationEndpoint: payload.endpointUri,
+	apiVersionDeployment: null,
+	apiVersionCreationDate: flowVars.apiCreationDates.'$apiId',
+	portalIsPublic: flowVars.portalIsPublic
+}]]></dw:set-variable>
+                                        </dw:transform-message>
                                     </when>
                                     <otherwise>
                                         <logger level="DEBUG" doc:name="Logger"/>
                                     </otherwise>
                                 </choice>
 							</foreach>
+                            <dw:transform-message doc:name="Transform Message">
+                                <dw:set-variable variableName="businessOrgs"><![CDATA[%dw 1.0
+%output application/java
+---
+flowVars.businessOrgs +
+{
+	businessOrgName: flowVars.businessOrgName,
+	businessOrgId: flowVars.businessOrgId,
+	processedCalls: flowVars.processedCalls,
+  	blockedCalls: flowVars.blockedCalls,
+  	apiVersions: flowVars.apiVersions
+}]]></dw:set-variable>
+                            </dw:transform-message>
 						</when>
 						<otherwise>
 							<logger level="DEBUG" doc:name="Logger" />
