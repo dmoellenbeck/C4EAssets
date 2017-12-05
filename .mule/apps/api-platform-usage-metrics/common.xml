@@ -12,6 +12,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
 
 	<flow name="getAnypointToken">
+        <logger message="ExecutionId: #[flowVars.executionId] - Get Anypoint Token" level="INFO" doc:name="Logger"/>
 		<set-payload value="username=${anypointUsername}&amp;password=${anypointPassword}" doc:name="setPayload" />
 		<http:request config-ref="Anypoint_HTTPS_Connector" path="/accounts/login" method="POST" doc:name="getAnypointToken">
 			<http:request-builder>
@@ -24,13 +25,12 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 				<dw:transform-message doc:name="JSON to Object">
 					<dw:set-payload resource="classpath:transformations/map-json-to-object.dwl" />
 				</dw:transform-message>
-				<logger message="response received from AnypointPlatform for getAnypointToken call #[payload]" level="INFO" doc:name="Logger" />
 				<dw:transform-message doc:name="Set anypointToken variable">
 					<dw:set-variable resource="classpath:variables/set-anypointToken-variable.dwl" variableName="anypointToken" />
 				</dw:transform-message>
 			</when>
 			<otherwise>
-				<logger level="ERROR" doc:name="Logger" message="logger after getAnypointToken call" />
+				<logger level="ERROR" doc:name="Logger" message="ExecutionId: #[flowVars.executionId] - Logger after getAnypointToken call" />
 				<scripting:component doc:name="Script">
 					<scripting:script engine="Groovy"><![CDATA[throw new RuntimeException('Non 200 response received from AnypointPlatform while requesting token, no token received, impossible to proceed')]]></scripting:script>
 				</scripting:component>
@@ -40,6 +40,7 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 	<flow name="getOrganizationHierarchyAndEnvironments">
 		<scatter-gather doc:name="Scatter-Gather">
 			<processor-chain>
+                <logger message="ExecutionId: #[flowVars.executionId] - Get Organization Hierarchy" level="INFO" doc:name="Logger"/>
 				<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.accountsApi.uri}/{rootOrgId}/hierarchy" method="GET" doc:name="getOrgHierarchy">
 					<http:request-builder>
 						<http:uri-param paramName="rootOrgId" value="#[flowVars.rootOrgId]" />
@@ -52,6 +53,7 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 				</dw:transform-message>
 			</processor-chain>
 			<processor-chain>
+                <logger message="ExecutionId: #[flowVars.executionId] - Get environments" level="INFO" doc:name="Logger"/>
 				<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.accountsApi.uri}/{rootOrgId}/environments" method="GET" doc:name="getEnvironments">
 					<http:request-builder>
 						<http:uri-param paramName="rootOrgId" value="#[flowVars.rootOrgId]" />
@@ -71,11 +73,11 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 						<dw:transform-message doc:name="Set orgIdNameMap, orgIdList and environments variables">
 							<dw:set-variable resource="classpath:variables/set-orgIdNameMap-variable.dwl" variableName="orgIdNameMap" />
 							<dw:set-variable resource="classpath:variables/set-orgIdList-variable.dwl" variableName="orgIdList" />
-							<dw:set-variable resource="classpath:variables/set-environments-variable.dwl" variableName="environments" />
+                            <dw:set-variable resource="classpath:variables/set-environments-variable.dwl" variableName="environments"/>
 						</dw:transform-message>
 					</when>
 					<otherwise>
-						<logger level="ERROR" doc:name="Logger" message="logger after getEnvironments call" />
+						<logger level="ERROR" doc:name="Logger" message="ExecutionId: #[flowVars.executionId] - Logger after getEnvironments call" />
 						<scripting:component doc:name="Groovy">
 							<scripting:script engine="Groovy"><![CDATA[throw new RuntimeException('Error received from AnypointPlatform while requesting environments, no data received, impossible to proceed')]]></scripting:script>
 						</scripting:component>
@@ -83,7 +85,7 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 				</choice>
 			</when>
 			<otherwise>
-				<logger level="ERROR" doc:name="Logger" message="logger after getHierarchy call" />
+				<logger level="ERROR" doc:name="Logger" message="ExecutionId: #[flowVars.executionId] - Logger after getHierarchy call" />
 				<scripting:component doc:name="Script">
 					<scripting:script engine="Groovy"><![CDATA[throw new RuntimeException('Error received from AnypointPlatform while requesting hierarchy, no data received, impossible to proceed')]]></scripting:script>
 				</scripting:component>
@@ -91,6 +93,7 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 		</choice>
 	</flow>
 	<flow name="getBasicMetrics">
+        <logger message="ExecutionId: #[flowVars.executionId] - Get basic metrics" level="INFO" doc:name="Logger"/>
 		<scatter-gather doc:name="Scatter-Gather">
 			<flow-ref name="getTotalNumberOfAPIDefinitions" doc:name="getTotalNumberOfAPIDefinitions" />
 			<flow-ref name="getTransactions" doc:name="getTransactions" />
@@ -102,25 +105,9 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
             <flow-ref name="getActiveAPIs" doc:name="getActiveAPIs"/>
             <flow-ref name="getBusinessOrgs" doc:name="getBusinessOrgs"/>
 		</scatter-gather>
-		<dw:transform-message doc:name="Transform Message">
+		<dw:transform-message doc:name="Map collected metrics">
 			<dw:input-payload mimeType="application/java" />
-			<dw:set-payload><![CDATA[%dw 1.0
-%output application/java
----
-{
-	totalNumberOfAPIDefinitions: payload[0],
-	totalTransactionsProcessed: payload[1],
-	exchangeAssets: payload[2],
-	totalNumberOfUsers: payload[3],
-	totalNumberOfClientApplications: payload[4],
-	runtimeUsageStatistics: payload[5],
-	policiesBeingUsed: payload[6].policiesBeingUsed,
-	policyApiAssociationList: payload[6].policyApiAssociationList,
-	totalNumberOfUnsecureAPIs: payload[6].totalNumberOfUnsecureAPIs,
-	totalNumberOfUndocumentedAPIs: payload[6].totalNumberOfUndocumentedAPIs,
-	activeAPIs: payload[7],
-	businessOrgs: payload[8]
-}]]></dw:set-payload>
+            <dw:set-payload resource="classpath:transformations/map-collected-metrics.dwl"/>
 		</dw:transform-message>
 	</flow>
 </mule>

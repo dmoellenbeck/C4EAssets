@@ -22,35 +22,14 @@ http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee
 	<context:property-placeholder location="config.properties" />
 	<flow name="getApiPlatformMetrics">
 		<http:listener config-ref="HTTP_Listener_Configuration" path="/apiplatform/metrics" doc:name="HTTP" />
+        <set-variable variableName="executionId" value="#[java.util.UUID.randomUUID()]" doc:name="executionId"/>
 		<set-variable variableName="rootOrgId" value="${rootOrgId}" doc:name="rootOrgId" />
 		<flow-ref name="getAnypointToken" doc:name="getAnypointToken" />
 		<flow-ref name="getOrganizationHierarchyAndEnvironments" doc:name="getOrganizationHierarchyAndEnvironments" />
-		<set-payload value="#[null]" doc:name="Set Payload" />
 		<flow-ref name="getBasicMetrics" doc:name="getBasicMetrics" />
-		<dw:transform-message doc:name="Transform Message">
+		<dw:transform-message doc:name="Map response">
 			<dw:input-payload mimeType="application/java" />
-			<dw:set-payload><![CDATA[%dw 1.0
-%output application/json
----
-{
-	totalNumberOfBusinessOrgs: sizeOf flowVars.orgIdList,
-	totalNumberOfAPIDefinitions: payload.totalNumberOfAPIDefinitions,
-	activeAPIs: payload.activeAPIs,
-	exchangeAssets: payload.exchangeAssets,
-	totalNumberOfUsers: payload.totalNumberOfUsers,
-	totalNumberOfClientApplications: payload.totalNumberOfClientApplications,
-	onPremRuntimeUsageStatistics: payload.runtimeUsageStatistics.onPremRuntimeUsageStatistics,
-	cloudhubUsageStatistics: payload.runtimeUsageStatistics.cloudhubUsageStatistics,
-	totalTransactionsProcessed: payload.totalTransactionsProcessed,
-	totalTransactionsProcessedInProduction: "Work in progress",
-	totalTransactionsProcessedInAcceptance: "Work in progress",
-	totalTransactionsProcessedInDevelopment: "Work in progress",
-	policiesBeingUsed: payload.policiesBeingUsed,
-	policyApiAssociationList: payload.policyApiAssociationList,
-	totalNumberOfUnsecureAPIs: payload.totalNumberOfUnsecureAPIs,
-	totalNumberOfUndocumentedAPIs: payload.totalNumberOfUndocumentedAPIs,
-	businessOrgs: payload.businessOrgs
-}]]></dw:set-payload>
+            <dw:set-payload resource="classpath:transformations/map-response.dwl"/>
 		</dw:transform-message>
 		<exception-strategy ref="exception-handler" doc:name="Reference Exception Strategy" />
 	</flow>

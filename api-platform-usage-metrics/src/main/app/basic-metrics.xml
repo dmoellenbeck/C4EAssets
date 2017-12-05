@@ -11,6 +11,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
 
 	<flow name="getTotalAssets">
+		<logger message="ExecutionId: #[flowVars.executionId] - Get total assets" level="INFO" doc:name="Logger" />
 		<dw:transform-message doc:name="Initialize variables">
 			<dw:input-payload mimeType="application/java" />
 			<dw:set-variable resource="classpath:variables/init-offset-variable.dwl" variableName="offset" />
@@ -18,20 +19,13 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 			<dw:set-variable resource="classpath:variables/init-assetsList-variable.dwl" variableName="assetsList" />
 		</dw:transform-message>
 		<flow-ref name="getExchangePage" doc:name="getExchangePage" />
-		<dw:transform-message doc:name="Set exchangeAssets variable">
-			<dw:set-payload><![CDATA[%dw 1.0
-%output application/java
-%var total = sizeOf flowVars.assetsList
-%var assets = flowVars.assetsList
----
-({ "Total": total } ++
-(assets groupBy $.type mapObject (v, k) -> {
-  (capitalize pluralize k): sizeOf v
-})) when total > 0 otherwise {}
-]]></dw:set-payload>
+		<dw:transform-message doc:name="Map exchange assets">
+			<dw:set-payload resource="classpath:transformations/map-exchange-assets.dwl" />
 		</dw:transform-message>
 	</flow>
 	<flow name="getExchangePage">
+		<logger message="ExecutionId: #[flowVars.executionId] - Get total exchange assets with offset: #[flowVars.offset] and limit: #[flowVars.limit]" level="INFO"
+			doc:name="Logger" />
 		<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.exchange.uri}" method="GET" doc:name="getTotalExchangeAssets">
 			<http:request-builder>
 				<http:query-param paramName="organizationId" value="#[flowVars.rootOrgId]" />
@@ -57,16 +51,18 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 						<flow-ref name="getExchangePage" doc:name="getAssetsFromExchange" />
 					</when>
 					<otherwise>
-						<logger level="INFO" doc:name="Logger" />
+						<logger level="DEBUG" doc:name="do nothing" />
 					</otherwise>
 				</choice>
 			</when>
 			<otherwise>
-				<logger message="Http status from getTotalAssets call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+				<logger message="Http status from getTotalAssets call: #[message.inboundProperties['http.status']] for OrgId: #[flowVars.rootOrgId], ignoring for now" level="INFO"
+					doc:name="Logger" />
 			</otherwise>
 		</choice>
 	</flow>
 	<flow name="getTotalUsers">
+		<logger message="ExecutionId: #[flowVars.executionId] - Get total users" level="INFO" doc:name="Logger" />
 		<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.accountsApi.uri}/#[flowVars.rootOrgId]/members?limit=10&amp;offset=0" method="GET"
 			doc:name="getTotalUsers">
 			<http:request-builder>
@@ -76,19 +72,18 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 		</http:request>
 		<choice doc:name="Choice">
 			<when expression="#[message.inboundProperties['http.status']=='200']">
-				<dw:transform-message doc:name="Set usersTotal variable">
-					<dw:set-payload><![CDATA[%dw 1.0
-%output application/java
----
-payload.total default 0 as :number]]></dw:set-payload>
+				<dw:transform-message doc:name="Map usersTotal">
+					<dw:set-payload resource="classpath:transformations/map-usersTotal.dwl" />
 				</dw:transform-message>
 			</when>
 			<otherwise>
-				<logger message="Http status from getTotalUsers call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+				<logger message="ExecutionId: #[flowVars.executionId] - Http status from getTotalUsers call: #[message.inboundProperties['http.status']] , ignoring for now"
+					level="INFO" doc:name="Logger" />
 			</otherwise>
 		</choice>
 	</flow>
 	<flow name="getApplications">
+		<logger message="ExecutionId: #[flowVars.executionId] - Get applications" level="INFO" doc:name="Logger" />
 		<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars.rootOrgId]/applications?ascending=true&amp;amp;limit=10&amp;amp;offset=0"
 			method="GET" doc:name="getTotalApps">
 			<http:request-builder>
@@ -99,18 +94,18 @@ payload.total default 0 as :number]]></dw:set-payload>
 		<choice doc:name="Choice">
 			<when expression="#[message.inboundProperties['http.status']=='200']">
 				<dw:transform-message doc:name="Set appsTotal variable">
-					<dw:set-payload><![CDATA[%dw 1.0
-%output application/java
----
-payload.total default 0 as :number]]></dw:set-payload>
+					<dw:set-payload resource="classpath:transformations/map-appsTotal.dwl" />
 				</dw:transform-message>
 			</when>
 			<otherwise>
-				<logger message="Http status from getApplications call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+				<logger
+					message="ExecutionId: #[flowVars.executionId] - Http status from getApplications call: #[message.inboundProperties['http.status']] for OrgId: #[flowVars.rootOrgId], ignoring for now"
+					level="INFO" doc:name="Logger" />
 			</otherwise>
 		</choice>
 	</flow>
 	<flow name="getTotalNumberOfAPIDefinitions">
+		<logger message="ExecutionId: #[flowVars.executionId] - Get total number of API definitions" level="INFO" doc:name="Logger" />
 		<dw:transform-message doc:name="Init totalNumberOfAPIDefinitions variable">
 			<dw:input-payload mimeType="application/java" />
 			<dw:set-variable resource="classpath:variables/init-totalNumberOfAPIDefinitions-variable.dwl" variableName="totalNumberOfAPIDefinitions" />
@@ -129,13 +124,15 @@ payload.total default 0 as :number]]></dw:set-payload>
 					</dw:transform-message>
 				</when>
 				<otherwise>
-					<logger message="Http status from getAPIsPerOrg call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+					<logger message="ExecutionId: #[flowVars.executionId] - Http status from getAPIsPerOrg call: #[message.inboundProperties['http.status']] , ignoring for now"
+						level="INFO" doc:name="Logger" />
 				</otherwise>
 			</choice>
 		</foreach>
 		<set-payload value="#[flowVars.totalNumberOfAPIDefinitions]" doc:name="Set Payload with totalNumberOfAPIDefinitions variable" />
 	</flow>
 	<flow name="getTransactions">
+		<logger message="ExecutionId: #[flowVars.executionId] - Get transactions" level="INFO" doc:name="Logger" />
 		<dw:transform-message doc:name="Initialize processedCalls variable">
 			<dw:input-payload mimeType="application/java" />
 			<dw:set-variable resource="classpath:variables/init-processedCalls-variable.dwl" variableName="processedCalls" />
@@ -146,7 +143,6 @@ payload.total default 0 as :number]]></dw:set-payload>
 				<dw:set-payload resource="classpath:transformations/map-analytics-request.dwl" />
 				<dw:set-variable resource="classpath:variables/set-currentOrgId-variable.dwl" variableName="currentOrgId" />
 			</dw:transform-message>
-			<logger message="${anypoint.analytics.uri}/#[flowVars.currentOrgId]/query and token is #[flowVars.anypointToken]" level="INFO" doc:name="Logger" />
 			<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.analytics.uri}/#[flowVars.currentOrgId]/query" method="POST"
 				doc:name="GetAPICallMetricsForCurrentSubOrg">
 				<http:request-builder>
@@ -161,23 +157,20 @@ payload.total default 0 as :number]]></dw:set-payload>
 					</dw:transform-message>
 				</when>
 				<otherwise>
-					<logger message="Response code is #[message.inboundProperties['http.status']] and response is #[payload]" level="ERROR" doc:name="Logger" />
+					<logger
+						message="ExecutionId: #[flowVars.executionId] - Http status from getTransactions call: #[message.inboundProperties['http.status']] for OrgId: #[flowVars.currentOrgId], ignoring for now"
+						level="INFO" doc:name="Logger" />
 				</otherwise>
 			</choice>
 		</foreach>
 		<set-payload value="#[flowVars.processedCalls]" doc:name="Set Payload with processedCalls variable" />
 	</flow>
 	<flow name="getRuntimeAppsStats">
+		<logger message="ExecutionId: #[flowVars.executionId] - Get Runtime Apps Stats" level="INFO" doc:name="Logger" />
 		<dw:transform-message doc:name="Initialize variables">
 			<dw:input-payload mimeType="application/java" />
-			<dw:set-variable variableName="cloudhubUsageStatistics"><![CDATA[%dw 1.0
-%output application/java
----
-{}]]></dw:set-variable>
-			<dw:set-variable variableName="onPremRuntimeUsageStatistics"><![CDATA[%dw 1.0
-%output application/java
----
-{}]]></dw:set-variable>
+			<dw:set-variable resource="classpath:variables/init-cloudhubUsageStatistics-variable.dwl" variableName="cloudhubUsageStatistics" />
+			<dw:set-variable resource="classpath:variables/init-onPremRuntimeUsageStatistics-variable.dwl" variableName="onPremRuntimeUsageStatistics" />
 		</dw:transform-message>
 		<foreach collection="#[flowVars.environments]" doc:name="For Each">
 			<set-variable variableName="envId" value="#[payload.id]" doc:name="set envId" />
@@ -195,20 +188,15 @@ payload.total default 0 as :number]]></dw:set-payload>
 			</dw:transform-message>
 			<choice doc:name="getHybridApps?">
 				<when expression="#[message.inboundProperties.'http.status' == 200]">
-					<dw:transform-message doc:name="Transform Message">
-						<dw:set-variable variableName="onPremRuntimeUsageStatistics"><![CDATA[%dw 1.0
-%output application/java
-%var started = payload.data filter $.lastReportedStatus == "STARTED"
----
-flowVars.onPremRuntimeUsageStatistics
-++
-{
-	(flowVars.envName): sizeOf started
-}]]></dw:set-variable>
+					<dw:transform-message doc:name="Update onPremRuntimeUsageStatistics">
+						<dw:input-payload mimeType="application/java" />
+						<dw:set-variable resource="classpath:variables/update-onPremRuntimeUsageStatistics-variable.dwl" variableName="onPremRuntimeUsageStatistics" />
 					</dw:transform-message>
 				</when>
 				<otherwise>
-					<logger message="Http status from getHybridApps call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+					<logger
+						message="ExecutionId: #[flowVars.executionId] - Http status from getHybridApps call: #[message.inboundProperties['http.status']] for OrgId: #[flowVars.rootOrgId] in: EnvId: #[flowVars.envId], ignoring for now"
+						level="INFO" doc:name="Logger" />
 				</otherwise>
 			</choice>
 			<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.cloudhub.uri}" method="GET" doc:name="getCloudhubApps">
@@ -224,33 +212,24 @@ flowVars.onPremRuntimeUsageStatistics
 			</dw:transform-message>
 			<choice doc:name="getCloudhubApps?">
 				<when expression="#[message.inboundProperties.'http.status' == 200]">
-					<dw:transform-message doc:name="Transform Message">
-						<dw:set-variable variableName="cloudhubUsageStatistics"><![CDATA[%dw 1.0
-%output application/java
-%var started = payload filter $.status == "STARTED"
----
-flowVars.cloudhubUsageStatistics ++ ((flowVars.envName): started groupBy $.workerType mapObject ( (v, k) ->
-  (k): sum v.workers
-) ++ {applicationCount: sizeOf started})
-]]></dw:set-variable>
+					<dw:transform-message doc:name="Update cloudhubUsageStatistics">
+						<dw:input-payload mimeType="application/java" />
+						<dw:set-variable resource="classpath:variables/update-cloudhubUsageStatistics-variable.dwl" variableName="cloudhubUsageStatistics" />
 					</dw:transform-message>
 				</when>
 				<otherwise>
-					<logger message="Http status from getCloudhubApps call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+					<logger
+						message="ExecutionId: #[flowVars.executionId] - Http status from getCloudhubApps call: #[message.inboundProperties['http.status']] in EnvId: #[flowVars.envId], ignoring for now"
+						level="INFO" doc:name="Logger" />
 				</otherwise>
 			</choice>
 		</foreach>
-		<dw:transform-message doc:name="Transform Message">
-			<dw:set-payload><![CDATA[%dw 1.0
-%output application/java
----
-{
-	onPremRuntimeUsageStatistics: flowVars.onPremRuntimeUsageStatistics,
-	cloudhubUsageStatistics: flowVars.cloudhubUsageStatistics
-}]]></dw:set-payload>
+		<dw:transform-message doc:name="Map runtime statics">
+			<dw:set-payload resource="classpath:transformations/map-runtime-statics.dwl" />
 		</dw:transform-message>
 	</flow>
 	<flow name="getPoliciesBeingUsed">
+		<logger message="ExecutionId: #[flowVars.executionId] - Get policies being used" level="INFO" doc:name="Logger" />
 		<dw:transform-message doc:name="Initialize variables">
 			<dw:input-payload mimeType="application/java" />
 			<dw:set-variable resource="classpath:variables/init-policiesBeingUsed-variable.dwl" variableName="policiesBeingUsed" />
@@ -290,7 +269,8 @@ flowVars.cloudhubUsageStatistics ++ ((flowVars.envName): started groupBy $.worke
 					</foreach>
 				</when>
 				<otherwise>
-					<logger message="Http status from getAPIsPerOrg call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+					<logger message="Http status from getAPIsPerOrg call: #[message.inboundProperties['http.status']] for OrgId: #[flowVars.currentOrgId], ignoring for now"
+						level="INFO" doc:name="Logger" />
 				</otherwise>
 			</choice>
 		</foreach>
@@ -299,6 +279,7 @@ flowVars.cloudhubUsageStatistics ++ ((flowVars.envName): started groupBy $.worke
 		</dw:transform-message>
 	</flow>
 	<flow name="getPolicyTemplates">
+		<logger message="ExecutionId: #[flowVars.executionId] - Get policy template names" level="INFO" doc:name="Logger" />
 		<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars.currentOrgId]/policy-templates" method="GET"
 			doc:name="getPolicyTemplateNames">
 			<http:request-builder>
@@ -313,11 +294,14 @@ flowVars.cloudhubUsageStatistics ++ ((flowVars.envName): started groupBy $.worke
 				</dw:transform-message>
 			</when>
 			<otherwise>
-				<logger message="Http status from getPolicyTemplates call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+				<logger
+					message="ExecutionId: #[flowVars.executionId] - Http status from getPolicyTemplates call: #[message.inboundProperties['http.status']] for OrgId: #[flowVars.currentOrgId], ignoring for now"
+					level="INFO" doc:name="Logger" />
 			</otherwise>
 		</choice>
 	</flow>
 	<flow name="getPoliciesForAPIVersion">
+		<logger message="ExecutionId: #[flowVars.executionId] - Get policies" level="INFO" doc:name="Logger" />
 		<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars.currentOrgId]/apis/#[flowVars.apiId]/versions/#[flowVars.apiVersionId]/policies"
 			method="GET" doc:name="getPolicies">
 			<http:request-builder>
@@ -345,11 +329,14 @@ flowVars.cloudhubUsageStatistics ++ ((flowVars.envName): started groupBy $.worke
 				</choice>
 			</when>
 			<otherwise>
-				<logger message="Http status from getPoliciesForAPIVersion call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+				<logger
+					message="ExecutionId: #[flowVars.executionId] - Http status from getPoliciesForAPIVersion call: #[message.inboundProperties['http.status']] for OrgId: #[flowVars.currentOrgId] APIId: #[flowVars.apiId] VersionId: #[flowVars.apiVersionId], ignoring for now"
+					level="INFO" doc:name="Logger" />
 			</otherwise>
 		</choice>
 	</flow>
 	<flow name="getActiveAPIs">
+		<logger message="ExecutionId: #[flowVars.executionId] - Get active APIs" level="INFO" doc:name="Logger" />
 		<dw:transform-message doc:name="Initialize app names variables">
 			<dw:set-variable resource="classpath:variables/init-cloudhubAppNames-variables.dwl" variableName="cloudhubAppNames" />
 			<dw:set-variable resource="classpath:variables/init-hybridAppNames-variable.dwl" variableName="hybridAppNames" />
@@ -371,19 +358,13 @@ flowVars.cloudhubUsageStatistics ++ ((flowVars.envName): started groupBy $.worke
 			<choice doc:name="getHybridApps?">
 				<when expression="#[message.inboundProperties.'http.status' == 200]">
 					<dw:transform-message doc:name="Map Hybrid Apps Names">
-						<dw:set-variable variableName="hybridAppNames"><![CDATA[%dw 1.0
-%output application/java
-%var appList = payload.data filter $.lastReportedStatus == "STARTED"
----
-flowVars.hybridAppNames ++
-{
-  (flowVars.envId): appList map $.name
-}
-]]></dw:set-variable>
+						<dw:set-variable resource="classpath:variables/update-hybridAppNames-variable.dwl" variableName="hybridAppNames" />
 					</dw:transform-message>
 				</when>
 				<otherwise>
-					<logger message="Http status from getHybridApps call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+					<logger
+						message="ExecutionId: #[flowVars.executionId] - Http status from getHybridApps call: #[message.inboundProperties['http.status']] for OrgId: #[flowVars.rootOrgId] and EnvId: #[flowVars.envId], ignoring for now"
+						level="INFO" doc:name="Logger" />
 				</otherwise>
 			</choice>
 			<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.cloudhub.uri}" method="GET" doc:name="getCloudhubApps">
@@ -400,18 +381,13 @@ flowVars.hybridAppNames ++
 			<choice doc:name="getCloudhubApps?">
 				<when expression="#[message.inboundProperties.'http.status' == 200]">
 					<dw:transform-message doc:name="Map CH Apps Names">
-						<dw:set-variable variableName="cloudhubAppNames"><![CDATA[%dw 1.0
-%output application/java
-%var appList = payload filter $.status == "STARTED"
----
-flowVars.cloudhubAppNames ++
-{
-  (flowVars.envId): appList map $.domain
-}]]></dw:set-variable>
+						<dw:set-variable resource="classpath:variables/update-cloudhubAppNames-variable.dwl" variableName="cloudhubAppNames" />
 					</dw:transform-message>
 				</when>
 				<otherwise>
-					<logger message="Http status from getCloudhubApps call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+					<logger
+						message="ExecutionId: #[flowVars.executionId] - Http status from getCloudhubApps call: #[message.inboundProperties['http.status']] for EnvId: #[flowVars.envId], ignoring for now"
+						level="ERROR" doc:name="Logger" />
 				</otherwise>
 			</choice>
 		</foreach>
@@ -419,15 +395,7 @@ flowVars.cloudhubAppNames ++
 			<dw:transform-message doc:name="Set currentOrgId and initialize activeAPIsCounter variable">
 				<dw:input-payload mimeType="application/java" />
 				<dw:set-variable resource="classpath:variables/set-currentOrgId-variable.dwl" variableName="currentOrgId" />
-				<dw:set-variable variableName="activeAPIsCounter"><![CDATA[%dw 1.0
-%output application/java
----
-{(flowVars.environments map {
-  ($.id): {
-  	on-prem: 0,
-    cloudhub: 0
-  }
-})}]]></dw:set-variable>
+				<dw:set-variable resource="classpath:variables/init-activeAPIsCounter-variable.dwl" variableName="activeAPIsCounter" />
 			</dw:transform-message>
 			<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars.currentOrgId]/apis" method="GET" doc:name="getApisPerOrg">
 				<http:request-builder>
@@ -462,73 +430,58 @@ flowVars.cloudhubAppNames ++
 						</dw:transform-message>
 						<choice doc:name="Choice">
 							<when expression="#[message.inboundProperties.'http.status' == 200 &amp;&amp; payload.deployment != null]">
-								<dw:transform-message doc:name="Transform Message">
+								<dw:transform-message doc:name="Update activeAPIsCounter">
 									<dw:input-payload mimeType="application/java" />
-									<dw:set-variable variableName="activeAPIsCounter"><![CDATA[%dw 1.0
-%output application/java
-%var environment = payload.deployment.environmentId
-%var applicationName = payload.deployment.applicationName
----
-flowVars.activeAPIsCounter mapObject ((v,k) -> {
- (k):v
-} when (('$k') != environment) otherwise (k): {
-  cloudhub : (v.cloudhub + 1) when flowVars.cloudhubAppNames.'$environment' contains applicationName otherwise v.cloudhub,
-  on-prem : (v.on-prem + 1) when flowVars.hybridAppNames.'$environment' contains applicationName otherwise v.on-prem
-})]]></dw:set-variable>
+									<dw:set-variable resource="classpath:variables/update-activeAPIsCounter-variable.dwl" variableName="activeAPIsCounter" />
 								</dw:transform-message>
 							</when>
 							<otherwise>
-								<logger message="Http status from getAPIVersions call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+								<logger
+									message="ExecutionId: #[flowVars.executionId] - Http status from getAPIVersions call: #[message.inboundProperties['http.status']] for OrgId: #[flowVars.currentOrgId] apiId: #[flowVars.apiId] apiVersionId: #[flowVars.apiVersionId], ignoring for now"
+									level="INFO" doc:name="Logger" />
 							</otherwise>
 						</choice>
 					</foreach>
 				</when>
 				<otherwise>
-					<logger message="Http status from getAPIsPerOrg call: #[message.inboundProperties['http.status']] , ignoring for now" level="ERROR" doc:name="Logger" />
+					<logger
+						message="ExecutionId: #[flowVars.executionId] - Http status from getAPIsPerOrg call: #[message.inboundProperties['http.status']] for #[flowVars.currentOrgId], ignoring for now"
+						level="INFO" doc:name="Logger" />
 				</otherwise>
 			</choice>
 		</foreach>
 		<dw:transform-message doc:name="Map activeAPIs">
 			<dw:input-payload mimeType="application/java" />
-			<dw:set-payload><![CDATA[%dw 1.0
-%output application/java
-%var mapIterative = ((argument) ->
-  argument match {
-    argument when (argument is :array) -> (argument map mapIterative($)) reduce ($ ++ $$),
-    argument when (argument is :object) -> argument mapObject (mapIterative($)),
-    default -> argument
-  }
-)
-%var environments = mapIterative(flowVars.environments map {
-  ($.id):$.name
-})
----
-flowVars.activeAPIsCounter mapObject (
-  (environments[$$]): ($ ++ { total: $.on-prem + $.cloudhub}) 
-)]]></dw:set-payload>
+			<dw:set-payload resource="classpath:transformations/map-active-apis.dwl" />
 		</dw:transform-message>
 	</flow>
 	<flow name="getBusinessOrgs">
-		<dw:transform-message doc:name="Transform Message">
-			<dw:set-variable variableName="businessOrgs"><![CDATA[%dw 1.0
-%output application/java
----
-[]]]></dw:set-variable>
+		<logger message="ExecutionId: #[flowVars.executionId] - Get business orgs" level="INFO" doc:name="Logger" />
+		<dw:transform-message doc:name="Initialize variable">
+			<dw:input-payload mimeType="application/java" />
+			<dw:set-variable resource="classpath:variables/init-businessOrgs-variable.dwl" variableName="businessOrgs" />
 		</dw:transform-message>
 		<foreach collection="#[flowVars.orgIdList]" doc:name="For Each">
-			<dw:transform-message doc:name="Transform Message">
+			<dw:transform-message doc:name="Set apiId and apiVersionId variables">
 				<dw:input-payload mimeType="application/java" />
 				<dw:set-payload resource="classpath:transformations/map-analytics-request.dwl" />
-				<dw:set-variable variableName="businessOrgId"><![CDATA[%dw 1.0
-%output application/java
----
-payload]]></dw:set-variable>
-				<dw:set-variable variableName="businessOrgName"><![CDATA[%dw 1.0
-%output application/java
----
-flowVars.orgIdNameMap[flowVars.businessOrgId]]]></dw:set-variable>
+				<dw:set-variable resource="classpath:variables/set-businessOrgId-variable.dwl" variableName="businessOrgId" />
+				<dw:set-variable resource="classpath:variables/set-businessOrgName-variable.dwl" variableName="businessOrgName" />
 			</dw:transform-message>
-			<logger message="${anypoint.analytics.uri}/#[flowVars.currentOrgId]/query and token is #[flowVars.anypointToken]" level="INFO" doc:name="Logger" />
+			<enricher target="#[flowVars.policyTemplates]" doc:name="Message Enricher">
+				<processor-chain doc:name="Processor Chain">
+					<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars.businessOrgId]/policy-templates" method="GET"
+						doc:name="getPolicyTemplateNames">
+						<http:request-builder>
+							<http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]" />
+						</http:request-builder>
+						<http:success-status-code-validator values="0..599" />
+					</http:request>
+					<dw:transform-message doc:name="Map response">
+						<dw:set-payload resource="classpath:transformations/map-getPolicyTemplateNames-response.dwl" />
+					</dw:transform-message>
+				</processor-chain>
+			</enricher>
 			<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.analytics.uri}/#[flowVars.businessOrgId]/query" method="POST"
 				doc:name="GetAPICallMetricsForCurrentSubOrg">
 				<http:request-builder>
@@ -538,159 +491,115 @@ flowVars.orgIdNameMap[flowVars.businessOrgId]]]></dw:set-variable>
 			</http:request>
 			<choice doc:name="Choice">
 				<when expression="#[message.inboundProperties['http.status']=='200']">
-					<dw:transform-message doc:name="Transform Message">
-                        <dw:set-variable variableName="processedCalls"><![CDATA[%dw 1.0
-%output application/java
----
-payload.response[0].request_disposition[0].PROCESSED.count default 0]]></dw:set-variable>
-                        <dw:set-variable variableName="blockedCalls"><![CDATA[%dw 1.0
-%output application/java
----
-payload.response[0].request_disposition[1].BLOCKED.count default 0]]></dw:set-variable>
+					<dw:transform-message doc:name="Map processed and blocked calls">
+						<dw:set-variable resource="classpath:variables/map-processedCalls-variable.dwl" variableName="processedCalls" />
+						<dw:set-variable resource="classpath:variables/map-blockedCalls-variable.dwl" variableName="blockedCalls" />
 					</dw:transform-message>
 					<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars.businessOrgId]/apis" method="GET" doc:name="getApisPerOrg">
 						<http:request-builder>
-                            <http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]"/>
+							<http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]" />
 						</http:request-builder>
 						<http:success-status-code-validator values="0..599" />
 					</http:request>
 					<dw:transform-message doc:name="JSON to Object">
-						<dw:set-payload><![CDATA[%dw 1.0
-%output application/java
----
-payload]]></dw:set-payload>
+						<dw:set-payload resource="classpath:transformations/map-json-to-object.dwl" />
 					</dw:transform-message>
 					<choice doc:name="Choice">
 						<when expression="#[message.inboundProperties.'http.status' == 200 &amp;&amp; payload.apis.size() &gt; 0]">
-							<dw:transform-message doc:name="Transform Message">
-                                <dw:set-payload><![CDATA[%dw 1.0
-%output application/java
----
-flatten payload.apis.versions map {
-  orgId: $.organizationId,
-  apiId: $.apiId,
-  apiVersionId: $.id,
-  versionName: $.name,
-  portalId: $.portalId,
-  portalIsPublic: $.portal.isPublic default false
-}]]></dw:set-payload>
-                                <dw:set-variable variableName="apiNames"><![CDATA[%dw 1.0
-%output application/java
-%var mapIterative = ((argument) ->
-  argument match {
-    argument when (argument is :array) -> (argument map mapIterative($)) reduce ($ ++ $$),
-    argument when (argument is :object) -> argument mapObject (mapIterative($)),
-    default -> argument
-  }
-)
----
-mapIterative(payload.apis map {
-  ($.id): $.name
-})]]></dw:set-variable>
-                                <dw:set-variable variableName="apiVersions"><![CDATA[%dw 1.0
-%output application/java
----
-[]]]></dw:set-variable>
-                                <dw:set-variable variableName="apiCreationDates"><![CDATA[%dw 1.0
-%output application/java
-%var mapIterative = ((argument) ->
-  argument match {
-    argument when (argument is :array) -> (argument map mapIterative($)) reduce ($ ++ $$),
-    argument when (argument is :object) -> argument mapObject (mapIterative($)),
-    default -> argument
-  }
-)
----
-mapIterative(payload.apis map {
-  ($.id): $.audit.created.date
-})]]></dw:set-variable>
+							<dw:transform-message doc:name="Map apis response">
+								<dw:input-payload mimeType="application/java" />
+                                <dw:set-payload resource="classpath:transformations/map-apis-response.dwl"/>
+                                <dw:set-variable resource="classpath:variables/set-apiNames-variable.dwl" variableName="apiNames"/>
+                                <dw:set-variable resource="classpath:variables/init-apiVersions-variable.dwl" variableName="apiVersions"/>
+                                <dw:set-variable resource="classpath:variables/set-apiCreationDates-variable.dwl" variableName="apiCreationDates"/>
 							</dw:transform-message>
 							<foreach doc:name="For Each">
-                                <dw:transform-message doc:name="Transform Message">
-                                    <dw:set-variable variableName="apiId"><![CDATA[%dw 1.0
+								<dw:transform-message doc:name="Set variables">
+									<dw:input-payload mimeType="application/java" />
+									<dw:set-variable variableName="apiId"><![CDATA[%dw 1.0
 %output application/java
 ---
 payload.apiId]]></dw:set-variable>
-                                    <dw:set-variable variableName="apiVersionId"><![CDATA[%dw 1.0
+									<dw:set-variable variableName="apiVersionId"><![CDATA[%dw 1.0
 %output application/java
 ---
 payload.apiVersionId]]></dw:set-variable>
-                                    <dw:set-variable variableName="versionName"><![CDATA[%dw 1.0
+									<dw:set-variable variableName="versionName"><![CDATA[%dw 1.0
 %output application/java
 ---
 payload.versionName]]></dw:set-variable>
-                                    <dw:set-variable variableName="portalIsPublic"><![CDATA[%dw 1.0
+									<dw:set-variable variableName="portalIsPublic"><![CDATA[%dw 1.0
 %output application/java
 ---
 payload.portalIsPublic]]></dw:set-variable>
-                                </dw:transform-message>
+								</dw:transform-message>
 								<http:request config-ref="Anypoint_HTTPS_Connector" path="${anypoint.apiplatform.uri}/#[flowVars.businessOrgId]/apis/#[flowVars.apiId]/versions/#[flowVars.apiVersionId]"
 									method="GET" doc:name="getApiVersions">
 									<http:request-builder>
-                                        <http:header headerName="Authorization" value="Bearer #[flowVars['anypointToken']]"/>
+										<http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]" />
 									</http:request-builder>
 									<http:success-status-code-validator values="0..599" />
 								</http:request>
-                                <choice doc:name="Choice">
-                                    <when expression="#[message.inboundProperties.'http.status' == 200]">
-                                        <dw:transform-message doc:name="Transform Message">
-                                            <dw:set-variable variableName="apiVersions"><![CDATA[%dw 1.0
-%output application/java
-%var apiId = flowVars.apiId as :string
----
-flowVars.apiVersions +
-(flowVars.apiNames.'$apiId' ++ "-" ++ flowVars.versionName): {
-	isCloudHub: payload.endpoint.isCloudHub default false,
-	containsPortal: true when payload.portalId != null otherwise false,
-	orgId: payload.organizationId,
-	apiName: flowVars.apiNames.'$apiId',
-	versionName: payload.name,
-	apiVersionDescription: payload.description,
-	apiId: payload.apiId,
-	apiVersionId: payload.id,
-	portalId: payload.portalId,
-	apiVersionProxyEndpointId: payload.endpoint.proxyUri,
-	apiVersionImplementationEndpoint: payload.endpointUri,
-	apiVersionDeployment: null,
-	apiVersionCreationDate: flowVars.apiCreationDates.'$apiId',
-	portalIsPublic: flowVars.portalIsPublic
-}]]></dw:set-variable>
-                                        </dw:transform-message>
-                                    </when>
-                                    <otherwise>
-                                        <logger level="DEBUG" doc:name="Logger"/>
-                                    </otherwise>
-                                </choice>
+								<choice doc:name="Choice">
+									<when expression="#[message.inboundProperties.'http.status' == 200]">
+										<enricher target="#[flowVars.policiesApplied]" doc:name="Message Enricher">
+											<processor-chain doc:name="Processor Chain">
+												<http:request config-ref="Anypoint_HTTPS_Connector"
+													path="${anypoint.apiplatform.uri}/#[flowVars.businessOrgId]/apis/#[flowVars.apiId]/versions/#[flowVars.apiVersionId]/policies" method="GET" doc:name="getPolicies">
+													<http:request-builder>
+														<http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]" />
+													</http:request-builder>
+													<http:success-status-code-validator values="0..599" />
+												</http:request>
+												<dw:transform-message doc:name="Map getPolicies response">
+                                                    <dw:set-payload resource="classpath:transformations/map-policies.dwl"/>
+												</dw:transform-message>
+											</processor-chain>
+										</enricher>
+										<enricher target="#[flowVars.apiOwner]" doc:name="Message Enricher">
+											<processor-chain doc:name="Processor Chain">
+												<http:request config-ref="Anypoint_HTTPS_Connector"
+													path="${anypoint.apiplatform.uri}/#[flowVars.businessOrgId]/apis/#[flowVars.apiId]/versions/#[flowVars.apiVersionId]/users/owners" method="GET"
+													doc:name="getApiVersionOwnerInfo">
+													<http:request-builder>
+														<http:header headerName="Authorization" value="Bearer #[flowVars.anypointToken]" />
+													</http:request-builder>
+													<http:success-status-code-validator values="0..599" />
+												</http:request>
+												<dw:transform-message doc:name="Map response">
+                                                    <dw:set-payload resource="classpath:transformations/map-getApiVersionOwnerInfo.dwl"/>
+												</dw:transform-message>
+											</processor-chain>
+										</enricher>
+										<dw:transform-message doc:name="Update api versions">
+                                            <dw:set-variable resource="classpath:variables/update-api-versions-variable.dwl" variableName="apiVersions"/>
+										</dw:transform-message>
+									</when>
+									<otherwise>
+										<logger level="INFO" doc:name="Logger" message="ExecutionId: #[flowVars.executionId] - HTTP status from getAPIVersions call: #[message.inboundProperties.'http.status'] for OrgId: #[flowVars.businessOrgId] apiId: #[flowVars.apiId] versionApiId: #[flowVars.apiVersionId], ignores for now"/>
+									</otherwise>
+								</choice>
 							</foreach>
-                            <dw:transform-message doc:name="Transform Message">
-                                <dw:set-variable variableName="businessOrgs"><![CDATA[%dw 1.0
-%output application/java
----
-flowVars.businessOrgs +
-{
-	businessOrgName: flowVars.businessOrgName,
-	businessOrgId: flowVars.businessOrgId,
-	processedCalls: flowVars.processedCalls,
-  	blockedCalls: flowVars.blockedCalls,
-  	apiVersions: flowVars.apiVersions
-}]]></dw:set-variable>
-                            </dw:transform-message>
+							<dw:transform-message doc:name="Update businessOrg variable">
+								<dw:input-payload mimeType="application/java" />
+                                <dw:set-variable resource="classpath:variables/update-businessOrgs-variable.dwl" variableName="businessOrgs"/>
+							</dw:transform-message>
 						</when>
 						<otherwise>
-							<logger level="DEBUG" doc:name="Logger" />
+							<logger level="INFO" doc:name="Logger"
+								message="ExecutionId: #[flowVars.executionId] - Http status from getAPIsPerOrg call: #[message.inboundProperties.'http.status'] for OrgId: #[flowVars.businessOrgId], ignore for now" />
 						</otherwise>
 					</choice>
 				</when>
 				<otherwise>
-					<logger message="Response code is #[message.inboundProperties['http.status']] and response is #[payload]" level="ERROR" doc:name="Logger" />
+					<logger message="ExecutionId: #[flowVars.executionId] - HTTP status from GetAPICallMetrics #[message.inboundProperties['http.status']] for OrgId: #[flowVars.businessOrgId]"
+						level="INFO" doc:name="Logger" />
 				</otherwise>
 			</choice>
 		</foreach>
-		<dw:transform-message doc:name="Transform Message">
-			<dw:set-payload><![CDATA[%dw 1.0
-%output application/java
----
-flowVars.businessOrgs]]></dw:set-payload>
+		<dw:transform-message doc:name="Map business org response">
+			<dw:input-payload mimeType="application/java" />
+            <dw:set-payload resource="classpath:tranformations/map-businessOrg-response.dwl"/>
 		</dw:transform-message>
 	</flow>
 </mule>
