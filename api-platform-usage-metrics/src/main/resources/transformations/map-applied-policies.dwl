@@ -17,5 +17,6 @@
   		}
 	),
 	totalNumberOfUnsecureAPIs: flowVars.totalNumberOfUnsecureAPIs,
-	totalNumberOfUndocumentedAPIs: flowVars.totalNumberOfUndocumentedAPIs
+	totalNumberOfUndocumentedAPIs: flowVars.totalNumberOfUndocumentedAPIs,
+	orgsWithoutScriptUserPermissions: flowVars.orgsWithoutScriptUserPermissions
 }

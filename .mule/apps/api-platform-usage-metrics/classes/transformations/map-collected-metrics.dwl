@@ -13,5 +13,6 @@
 	totalNumberOfUnsecureAPIs: payload[6].totalNumberOfUnsecureAPIs,
 	totalNumberOfUndocumentedAPIs: payload[6].totalNumberOfUndocumentedAPIs,
 	activeAPIs: payload[7],
-	businessOrgs: payload[8]
+	businessOrgs: payload[8],
+	orgsWithoutScriptUserPermissions: payload[6].orgsWithoutScriptUserPermissions
 }

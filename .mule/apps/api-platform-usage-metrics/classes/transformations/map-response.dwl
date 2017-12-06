@@ -18,5 +18,6 @@
 	policyApiAssociationList: payload.policyApiAssociationList,
 	totalNumberOfUnsecureAPIs: payload.totalNumberOfUnsecureAPIs,
 	totalNumberOfUndocumentedAPIs: payload.totalNumberOfUndocumentedAPIs,
-	businessOrgs: payload.businessOrgs
+	businessOrgs: payload.businessOrgs,
+	orgsWithoutScriptUserPermissions: payload.orgsWithoutScriptUserPermissions
 }

@@ -236,6 +236,7 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 			<dw:set-variable resource="classpath:variables/set-policyApiList-variable.dwl" variableName="policyApiList" />
 			<dw:set-variable resource="classpath:variables/set-totalNumberOfUnsecureAPIs-variable.dwl" variableName="totalNumberOfUnsecureAPIs" />
 			<dw:set-variable resource="classpath:variables/init-totalNumberOfUndocumentedAPIs-variable.dwl" variableName="totalNumberOfUndocumentedAPIs" />
+            <dw:set-variable resource="classpath:variables/init-orgsWithoutScriptUserPermissions-variable.dwl" variableName="orgsWithoutScriptUserPermissions"/>
 		</dw:transform-message>
 		<foreach collection="#[flowVars.orgIdList]" doc:name="For Each">
 			<dw:transform-message doc:name="Set currentOrgId variable">
@@ -271,6 +272,9 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 				<otherwise>
 					<logger message="Http status from getAPIsPerOrg call: #[message.inboundProperties['http.status']] for OrgId: #[flowVars.currentOrgId], ignoring for now"
 						level="INFO" doc:name="Logger" />
+                    <dw:transform-message doc:name="Update orgsWithoutScriptUserPermissions">
+                        <dw:set-variable resource="classpath:variables/update-orgsWithoutScriptUserPermissions-variable.dwl" variableName="orgsWithoutScriptUserPermissions"/>
+                    </dw:transform-message>
 				</otherwise>
 			</choice>
 		</foreach>
@@ -599,7 +603,7 @@ payload.portalIsPublic]]></dw:set-variable>
 		</foreach>
 		<dw:transform-message doc:name="Map business org response">
 			<dw:input-payload mimeType="application/java" />
-            <dw:set-payload resource="classpath:tranformations/map-businessOrg-response.dwl"/>
+            <dw:set-payload resource="classpath:transformations/map-businessOrg-response.dwl"/>
 		</dw:transform-message>
 	</flow>
 </mule>
